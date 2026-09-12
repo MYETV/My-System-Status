@@ -60,12 +60,12 @@ It is designed to be lightweight, modular (pure MVC without bloated dependencies
 ## 🛦 Installation Guide
 
 ### 1. Clone the Repository (in your own directory)
-group: git clone https://github.com/OskarCosimo/My-System-Status.git /var/www/mysystemstatus
-cd /var/www/mysystemstatus
+group: git clone https://github.com/OskarCosimo/My-System-Status.git /var/www/your-domain.com
+cd /var/www/your-domain.com
 
 ### 2. Set Directory Permissions
-sudo chown -R www-data:www-data /var/www/mysystemstatus
-sudo chmod -R 755 /var/www/mysystemstatus
+sudo chown -R www-data:www-data /var/www/your-domain.com
+sudo chmod -R 755 /var/www/your-domain.com
 
 ### 3. Run the Web Installer	
 Open your browser and navigate to:
@@ -82,11 +82,43 @@ add line:
 
 ---
 
+Ecco il paragrafo dedicato alla configurazione del **Database** da inserire nel tuo `README.md`:
+
+---
+
+Hai perfettamente ragione! Abbiamo creato il web installer grafico apposta per evitare a chiunque di dover toccare file di configurazione o comandi da terminale. 
+
+Togliamo qualsiasi procedura manuale. Ecco il paragrafo pulito e corretto al 100% per il `README.md`:
+
+---
+
+## 🗄️ Database Setup
+
+My System Status requires a MySQL or MariaDB database. You do **not** need to manually import SQL files or edit PHP configuration files:
+
+1. Create an empty database in MySQL:
+   ```sql
+   CREATE DATABASE mysystemstatus CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+   ```
+and assign and username and a password to it.
+
+2. Open your browser and go to `/install/` (e.g. `https://your-domain.com/install/`).
+
+3. Enter your database credentials and admin details in the graphical wizard. The installer will automatically:
+   - Verify connection and write `config/database.php`.
+   - Import the complete schema from `database/schema.sql`.
+   - Create your Super Administrator account.
+   - Lock the installer to prevent unauthorized access.
+
+### Database Migrations
+Future platform updates handle database changes automatically: any new migration script located in `database/migrations/` is executed by the integrated 1-click updater without manual intervention.
+---
+
 ## 🔥 ModSecurity & WAF Note (Localhost AI Endpoints)
 
 If your server runs ModSecurity with OWASP CRS, add the following to your ModSecurity custom rules to avoid SSRF false positives when configuring local Ollama endpoints:
 
-SecRule SERVER_NAME "@streq mysystemstatus" "id:210,phase:2,nolog,chain"
+SecRule SERVER_NAME "@streq your-domain.com" "id:210,phase:2,nolog,chain"
 SecRule REQUEST_URI "@beginsWith /admin/settings" "t:none,ctl:ruleRemoveById=934110"
 
 ---
@@ -95,7 +127,7 @@ SecRule REQUEST_URI "@beginsWith /admin/settings" "t:none,ctl:ruleRemoveById=934
 
 To display active incident or maintenance notices across external websites, simply include this script tag:
 
-<script src="https://mysystemstatus.com/assets/js/embed.js" async></script>
+<script src="https://your-domain.com/assets/js/embed.js" async></script>
 
 ---
 
