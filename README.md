@@ -1,4 +1,4 @@
-# My-System-Status
+# My System Status
 
 <p align="center">
   <strong>An open-source, enterprise-grade, self-hosted status page and uptime monitoring platform.</strong><br>
