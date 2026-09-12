@@ -4,8 +4,8 @@ use App\Services\SettingService;
 use App\Services\DateService;
 use App\Core\I18n;
 
-$appName = htmlspecialchars(SettingService::get('app_name', 'My System Status'));
-$appUrl  = SettingService::getAppUrl();
+$appName = htmlspecialchars(setting('app_name', 'My System Status'));
+$appUrl  = app_url();
 $userTz  = DateService::getActiveTimezone();
 $locale  = I18n::getLocale();
 ?>
@@ -14,13 +14,12 @@ $locale  = I18n::getLocale();
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= $appName ?> — Status</title>
+    <title><?= $appName ?> &mdash; Status</title>
 
     <!-- Bootstrap 5.3 CSS & Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
 
-    <!-- Custom Modern UI Enhancements -->
     <style>
         body {
             background-color: #f8fafc;
@@ -40,12 +39,40 @@ $locale  = I18n::getLocale();
             background: #ffffff;
             padding: 24px 0;
         }
-        .uptime-day {
-            transition: transform 0.15s ease-in-out;
+
+        /* Modern 90-Day Uptime Graph Styles */
+        .uptime-graph {
+            display: flex;
+            gap: 2px;
+            align-items: center;
+            height: 32px;
+            padding: 2px 0;
+        }
+        .uptime-bar {
+            flex: 1 1 0;
+            height: 100%;
+            border-radius: 3px;
+            transition: transform 0.12s ease, opacity 0.12s ease;
             cursor: pointer;
         }
-        .uptime-day:hover {
-            transform: scaleY(1.3);
+        .uptime-bar:hover {
+            transform: scaleY(1.35);
+            opacity: 0.85;
+            z-index: 10;
+        }
+        .uptime-operational { background-color: #10b981; }
+        .uptime-degraded    { background-color: #f59e0b; }
+        .uptime-outage      { background-color: #ef4444; }
+        .uptime-nodata      { background-color: #e2e8f0; }
+
+        /* Custom Tooltip Styling */
+        .tooltip-inner {
+            background-color: #0f172a;
+            color: #ffffff;
+            padding: 6px 10px;
+            font-size: 12px;
+            border-radius: 6px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         }
     </style>
 </head>
@@ -108,8 +135,8 @@ $locale  = I18n::getLocale();
         <div class="d-flex flex-wrap justify-content-between align-items-center">
             <span>&copy; <?= date('Y') ?> <?= $appName ?>. All rights reserved.</span>
             <div class="d-flex gap-3 mt-2 mt-sm-0">
-                <a href="https://developers.myetv.tv" target="_blank" class="text-decoration-none text-muted">API</a>
-                <a href="https://github.com/myetv" target="_blank" class="text-decoration-none text-muted">Powered by My System Status</a>
+                <a href="/api/v1/alerts" target="_blank" class="text-decoration-none text-muted">API</a>
+                <a href="https://github.com/myetv/my-system-status" target="_blank" class="text-decoration-none text-muted">Powered by My System Status</a>
             </div>
         </div>
     </div>
@@ -118,32 +145,11 @@ $locale  = I18n::getLocale();
 <!-- Bootstrap 5 Bundle JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
-<!-- Timezone Auto-Detection Script -->
+<!-- Initialize Bootstrap Tooltips with HTML Support -->
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-    // Enable Bootstrap Tooltips
     const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
-    [...tooltipTriggerList].map(el => new bootstrap.Tooltip(el));
-
-    // Auto-detect browser timezone on first visit
-    const hasTzCookie = document.cookie.split(';').some(item => item.trim().startsWith('user_timezone='));
-    if (!hasTzCookie) {
-        try {
-            const detectedTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-            if (detectedTz) {
-                fetch('/timezone/set', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    },
-                    body: 'timezone=' + encodeURIComponent(detectedTz)
-                });
-            }
-        } catch (e) {
-            console.warn('Could not auto-detect timezone', e);
-        }
-    }
+    [...tooltipTriggerList].map(el => new bootstrap.Tooltip(el, { html: true }));
 });
 </script>
 </body>
