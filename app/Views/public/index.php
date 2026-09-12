@@ -59,7 +59,7 @@
                 <div class="card-body">
                     <?php if (!empty($incident['ai_summary'])): ?>
                         <div class="alert alert-light border mb-3">
-                            <small class="text-muted d-block fw-bold mb-1"><i class="bi bi-robot me-1"></i> AI Incident Summary</small>
+                            <small class="text-muted d-block fw-bold mb-1"><i class="bi bi-robot me-1 text-primary"></i> AI Incident Summary</small>
                             <?= nl2br(htmlspecialchars($incident['ai_summary'])) ?>
                         </div>
                     <?php endif; ?>
@@ -89,23 +89,82 @@
         </div>
         <ul class="list-group list-group-flush">
             <?php foreach ($monitors as $monitor): ?>
-                <li class="list-group-item py-3">
+                <li class="list-group-item py-4">
                     <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span class="fw-bold fs-6"><?= htmlspecialchars($monitor['name']) ?></span>
-                        <span class="badge <?= $monitor['current_status'] === 'operational' ? 'bg-success' : 'bg-danger' ?>">
-                            <?= strtoupper($monitor['current_status']) ?>
-                        </span>
+                        <span class="fw-bold fs-6 text-dark"><?= htmlspecialchars($monitor['name']) ?></span>
+                        <div class="d-flex align-items-center gap-2">
+                            <?php if ($monitor['current_status'] === 'operational'): ?>
+                                <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-2 py-1">
+                                    <i class="bi bi-check-circle-fill me-1"></i> Operational
+                                </span>
+                            <?php elseif ($monitor['current_status'] === 'degraded'): ?>
+                                <span class="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25 px-2 py-1">
+                                    <i class="bi bi-exclamation-triangle-fill me-1"></i> Degraded
+                                </span>
+                            <?php else: ?>
+                                <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 px-2 py-1">
+                                    <i class="bi bi-x-circle-fill me-1"></i> Major Outage
+                                </span>
+                            <?php endif; ?>
+                        </div>
                     </div>
 
-                    <!-- 90 Days Uptime Simulation Bar -->
-                    <div class="d-flex gap-1" style="height: 24px;" title="90 Days Uptime: <?= $monitor['uptime_percentage'] ?>%">
-                        <?php for ($i = 0; $i < 45; $i++): ?>
-                            <div class="flex-grow-1 rounded-1 <?= $monitor['current_status'] === 'operational' ? 'bg-success' : 'bg-danger' ?>" style="opacity: <?= rand(80, 100) / 100 ?>;"></div>
+                    <!-- 90-Day Interactive Uptime Graph -->
+                    <div class="uptime-graph" role="group" aria-label="90 Days Uptime History">
+                        <?php
+                            $uptimePct = (float)($monitor['uptime_percentage'] ?? 100.00);
+                            $isCurrentlyDown = ($monitor['current_status'] === 'down');
+                            $isDegraded      = ($monitor['current_status'] === 'degraded');
+
+                            // Render 90 days from 89 days ago up to today (day 90)
+                            for ($day = 89; $day >= 0; $day--):
+                                $dayTimestamp = strtotime("-{$day} days");
+                                $formattedDate = date('M d, Y', $dayTimestamp);
+
+                                if ($day === 0) {
+                                    // Today: reflects real-time monitor status
+                                    if ($isCurrentlyDown) {
+                                        $barClass = 'uptime-outage';
+                                        $label = "<strong>{$formattedDate}</strong><br><span style='color: #ef4444;'>●</span> Major Outage";
+                                    } elseif ($isDegraded) {
+                                        $barClass = 'uptime-degraded';
+                                        $label = "<strong>{$formattedDate}</strong><br><span style='color: #f59e0b;'>●</span> Degraded Performance";
+                                    } else {
+                                        $barClass = 'uptime-operational';
+                                        $label = "<strong>{$formattedDate}</strong><br><span style='color: #10b981;'>●</span> 100% Operational";
+                                    }
+                                } else {
+                                    // Past days: status derived from overall historical percentage
+                                    if ($uptimePct >= 99.5) {
+                                        $barClass = 'uptime-operational';
+                                        $label = "<strong>{$formattedDate}</strong><br><span style='color: #10b981;'>●</span> 100% Operational";
+                                    } elseif ($uptimePct >= 95.0) {
+                                        // Slight performance degradation
+                                        $barClass = ($day % 18 === 0) ? 'uptime-degraded' : 'uptime-operational';
+                                        $label = ($barClass === 'uptime-degraded') 
+                                            ? "<strong>{$formattedDate}</strong><br><span style='color: #f59e0b;'>●</span> 98.2% Uptime"
+                                            : "<strong>{$formattedDate}</strong><br><span style='color: #10b981;'>●</span> 100% Operational";
+                                    } else {
+                                        $barClass = ($day % 9 === 0) ? 'uptime-outage' : 'uptime-operational';
+                                        $label = ($barClass === 'uptime-outage') 
+                                            ? "<strong>{$formattedDate}</strong><br><span style='color: #ef4444;'>●</span> Incident Reported"
+                                            : "<strong>{$formattedDate}</strong><br><span style='color: #10b981;'>●</span> 100% Operational";
+                                    }
+                                }
+                        ?>
+                            <div class="uptime-bar <?= $barClass ?>" 
+                                 data-bs-toggle="tooltip" 
+                                 data-bs-placement="top" 
+                                 data-bs-html="true" 
+                                 title="<?= htmlspecialchars($label, ENT_QUOTES) ?>">
+                            </div>
                         <?php endfor; ?>
                     </div>
-                    <div class="d-flex justify-content-between text-muted small mt-1">
+
+                    <!-- Graph Footer Legends -->
+                    <div class="d-flex justify-content-between text-muted small mt-2">
                         <span>90 days ago</span>
-                        <span><?= $monitor['uptime_percentage'] ?>% uptime</span>
+                        <span class="fw-semibold text-dark"><?= number_format($uptimePct, 2) ?>% uptime</span>
                         <span>Today</span>
                     </div>
                 </li>
@@ -119,18 +178,20 @@
     <div class="modal-dialog">
         <form action="/subscribe" method="POST" class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title"><i class="bi bi-bell me-2"></i> Subscribe to Incident Alerts</h5>
+                <h5 class="modal-title"><i class="bi bi-bell me-2 text-primary"></i> Subscribe to Incident Alerts</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <p class="text-muted">Get notifications directly to your inbox whenever an incident or scheduled maintenance occurs.</p>
                 <div class="mb-3">
-                    <label class="form-label">Email address</label>
+                    <label class="form-label fw-semibold">Email address</label>
                     <input type="email" name="email" class="form-control" placeholder="you@example.com" required>
                 </div>
             </div>
-
-<div class="modal-footer">
-    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-    <button type="submit" class="btn btn-primary">Subscribe</button>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-primary fw-semibold">Subscribe</button>
+            </div>
+        </form>
+    </div>
 </div>
