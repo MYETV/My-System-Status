@@ -1,0 +1,33 @@
+{
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "title": "Title",
+    "description": "Description",
+    "status": "Status"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "monitors": "Monitors & Probes",
+    "incidents": "Incidents & Outages",
+    "maintenance": "Maintenance",
+    "subscribers": "Subscribers",
+    "plugins": "Plugins & Feeds",
+    "logs": "System Logs",
+    "settings": "Settings",
+    "updates": "Updates",
+    "view_public_page": "View Status Page"
+  },
+  "maintenance": {
+    "title": "Scheduled Maintenance",
+    "schedule_new": "Schedule Maintenance",
+    "start_time": "Start Time",
+    "end_time": "End Time"
+  },
+  "status": {
+    "operational": "All Systems Operational",
+    "degraded": "Degraded Performance",
+    "partial_outage": "Partial Outage",
+    "major_outage": "Major Outage"
+  }
+}
