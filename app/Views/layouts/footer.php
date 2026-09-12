@@ -2,39 +2,36 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-    const sidebarToggle = document.getElementById('sidebarToggle');
     const sidebar = document.getElementById('sidebar-wrapper');
-    if (sidebarToggle && sidebar) {
-        sidebarToggle.addEventListener('click', () => {
-            sidebar.classList.toggle('d-none');
-        });
+    const toggleBtn = document.getElementById('sidebarToggle');
+
+    if (!sidebar || !toggleBtn) return;
+
+    // 1. Restore user preference from localStorage or auto-collapse on small screens
+    const isCollapsed = localStorage.getItem('sidebar_collapsed') === 'true' || window.innerWidth < 992;
+    if (isCollapsed) {
+        sidebar.classList.add('collapsed');
     }
-});
 
-document.addEventListener('DOMContentLoaded', () => {
-    // Check if user_timezone cookie already exists
-    const hasTimezoneCookie = document.cookie.split(';').some(item => item.trim().startsWith('user_timezone='));
+    // 2. Handle Burger Click
+    toggleBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        sidebar.classList.toggle('collapsed');
+        // Persist preference
+        localStorage.setItem('sidebar_collapsed', sidebar.classList.contains('collapsed'));
+    });
 
-    if (!hasTimezoneCookie) {
-        try {
-            // Read client local browser timezone
-            const detectedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-            if (detectedTimezone) {
-                // Post detected timezone to backend
-                fetch('/timezone/set', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    },
-                    body: 'timezone=' + encodeURIComponent(detectedTimezone)
-                }).then(() => {
-                    // Timezone cookie is now set silently for all next requests
-                });
+    // 3. Responsive auto-collapse when resizing window
+    let resizeTimer;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+            if (window.innerWidth < 992) {
+                sidebar.classList.add('collapsed');
+            } else if (localStorage.getItem('sidebar_collapsed') !== 'true') {
+                sidebar.classList.remove('collapsed');
             }
-        } catch (e) {
-            console.warn('Unable to detect local timezone:', e);
-        }
-    }
+        }, 100);
+    });
 });
 </script>
