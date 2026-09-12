@@ -59,17 +59,17 @@ It is designed to be lightweight, modular (pure MVC without bloated dependencies
 
 ## 🛦 Installation Guide
 
-### 1. Clone the Repository
-group: git clone https://github.com/myetv/my-system-status.git /var/www/mysystemstatus.myetv.tv
-cd /var/www/mysystemstatus.myetv.tv
+### 1. Clone the Repository (in your own directory)
+group: git clone https://github.com/OskarCosimo/My-System-Status.git /var/www/mysystemstatus
+cd /var/www/mysystemstatus
 
 ### 2. Set Directory Permissions
-sudo chown -R www-data:www-data /var/www/mysystemstatus.myetv.tv
-sudo chmod -R 755 /var/www/mysystemstatus.myetv.tv
+sudo chown -R www-data:www-data /var/www/mysystemstatus
+sudo chmod -R 755 /var/www/mysystemstatus
 
 ### 3. Run the Web Installer	
 Open your browser and navigate to:
-https://mysystemstatus.myetv.tv/install/
+https://mysystemstatus.com/install/
 
 Follow the graphical wizard to configure your MySQL credentials and create the Super Administrator account.
 
@@ -78,7 +78,7 @@ Add this entry to your server's crontab to run probe checks every minute:
 command: crontab -e
 
 add line:
-* * * * * php /var/www/mysystemstatus.myetv.tv/cron/runner.php >/dev/null 2>&1
+* * * * * php /var/www/mysystemstatus/cron/runner.php >/dev/null 2>&1
 
 ---
 
@@ -86,7 +86,7 @@ add line:
 
 If your server runs ModSecurity with OWASP CRS, add the following to your ModSecurity custom rules to avoid SSRF false positives when configuring local Ollama endpoints:
 
-SecRule SERVER_NAME "@streq mysystemstatus.myetv.tv" "id:210,phase:2,nolog,chain"
+SecRule SERVER_NAME "@streq mysystemstatus" "id:210,phase:2,nolog,chain"
 SecRule REQUEST_URI "@beginsWith /admin/settings" "t:none,ctl:ruleRemoveById=934110"
 
 ---
@@ -95,7 +95,7 @@ SecRule REQUEST_URI "@beginsWith /admin/settings" "t:none,ctl:ruleRemoveById=934
 
 To display active incident or maintenance notices across external websites, simply include this script tag:
 
-<script src="https://mysystemstatus.myetv.tv/assets/js/embed.js" async></script>
+<script src="https://mysystemstatus.com/assets/js/embed.js" async></script>
 
 ---
 
