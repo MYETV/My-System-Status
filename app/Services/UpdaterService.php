@@ -17,7 +17,7 @@ class UpdaterService
     {
         $appConfig = require dirname(__DIR__, 2) . '/config/app.php';
         $this->currentVersion = $appConfig['version'] ?? '1.0.0';
-        $this->repo           = setting('github_repo', 'myetv/mysystem-status');
+        $this->repo           = setting('github_repo', 'OskarCosimo/My-System-Status');
     }
 
     public function getCurrentVersion(): string
