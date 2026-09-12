@@ -107,7 +107,7 @@ class UpdaterService
         $zip->close();
         @unlink($tempZip);
 
-        // GitHub zip packages contain a root folder like 'repo-tag'
+        // GitHub zip packages contain a root folder like 'owner-repo-tag'
         $extractedItems = scandir($tempExtractDir);
         $innerFolder = null;
         foreach ($extractedItems as $item) {
@@ -119,11 +119,11 @@ class UpdaterService
 
         $sourceDir = $innerFolder ?: $tempExtractDir;
 
-        // 3. Copy files over root (skip private config files)
+        // 3. Copy files over root (protect custom configs and lock files)
         $this->copyRecursive($sourceDir, $rootDir);
         $this->deleteDirectory($tempExtractDir);
 
-        // 4. Run database migrations if any
+        // 4. Run database migrations via migrate.php
         $this->runMigrations();
 
         return true;
@@ -139,8 +139,11 @@ class UpdaterService
                 continue;
             }
 
-            // Never overwrite existing database config or install lock
+            // Never overwrite active database configuration or installer lock file
             if ($file === 'database.php' && basename($dest) === 'config') {
+                continue;
+            }
+            if ($file === 'installed.lock' && basename($dest) === 'install') {
                 continue;
             }
 
@@ -156,26 +159,14 @@ class UpdaterService
         closedir($dir);
     }
 
+    /**
+     * Run unified incremental database migrations.
+     */
     private function runMigrations(): void
     {
-        $migrationsDir = dirname(__DIR__, 2) . '/database/migrations';
-        if (!is_dir($migrationsDir)) {
-            return;
-        }
-
-        $db = Database::getInstance();
-        $files = glob($migrationsDir . '/*.sql');
-        sort($files);
-
-        foreach ($files as $file) {
-            $sql = file_get_contents($file);
-            if (!empty($sql)) {
-                try {
-                    $db->exec($sql);
-                } catch (\Throwable $e) {
-                    // Log migration errors if already executed
-                }
-            }
+        $migrateScript = dirname(__DIR__, 2) . '/migrate.php';
+        if (file_exists($migrateScript)) {
+            require $migrateScript;
         }
     }
 
