@@ -26,14 +26,14 @@ It is designed to be lightweight, modular (pure MVC without bloated dependencies
 ## ✄ Key Features
 
 - ⚡ **Multi-Protocol Monitoring Engine**: Concurrently probe targets via HTTP/HTTPS (curl_multi), Ping (ICMP), TCP Ports (sockets), and SSL Certificate Expiry validation.
--���Z **AI Incident Assistant**: Automatically analyze probe error traces and draft clear, non-technical public incident summaries using local Ollama or Google Gemini API.
+- **AI Incident Assistant**: Automatically analyze probe error traces and draft clear, non-technical public incident summaries using local Ollama or Google Gemini API.
 - 🔐 **Enterprise Security**:
   - **Two-Factor Authentication (2FA)**: Pure RFC 6238 TOTP engine compatible with Google Authenticator, Microsoft Authenticator, Authy, and 1Password.
   - **Cloudflare Turnstile**: Zero-friction bot protection on administrative login endpoints.
   - **Built-in Rate Limiter**: Automatic IP throttling and lockout against brute-force attacks.
--��� **OAuth 2.0 SSO**: Native support for MYETV Developer API, Google, Microsoft Azure AD, and Facebook Login.
+- **OAuth 2.0 SSO**: Native support for MYETV Developer API, Google, Microsoft Azure AD, and Facebook Login.
 - 💔 **Maintenance Scheduling with FullCalendar**: Schedule future downtime windows and view them interactively on a responsive calendar.
--���� **Subscriber Notifications**:
+- **Subscriber Notifications**:
   - Public visitors can subscribe via email without registering an account.
   - Built-in RFC-compliant SMTP mailer with native STARTTLS support.
   - One-click cryptographic unsubscribe tokens.
@@ -41,7 +41,7 @@ It is designed to be lightweight, modular (pure MVC without bloated dependencies
   - *1-Click External Status Importer**: Synchronize public health status from Cloudflare, GitHub, and Stripe.
   - **Discord Alert Webhooks**: Dispatch rich embed notifications to Discord channels on outages.
   - **LibreTranslate i18n Engine**: Auto-translate language JSON files on the fly.
--���� **Two-Layer Timezone Engine**: Global platform default (Admin Settings) + User personal timezone auto-detected from browser.
+- **Two-Layer Timezone Engine**: Global platform default (Admin Settings) + User personal timezone auto-detected from browser.
 - 👱 **Embeddable Alert SDK**: Lightweight JavaScript snippet (embed.js) to display active incidents and maintenance banners on external websites.
 - 🔴 **Integrated GitHub Auto-Updater**: Detect and install new versions directly from GitHub Releases with automatic database migrations.
 
