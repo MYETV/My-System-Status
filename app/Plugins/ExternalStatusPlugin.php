@@ -66,13 +66,31 @@ class ExternalStatusPlugin
         return $status;
     }
 
+    /**
+     * Update existing monitor by target or insert a new one if not found.
+     */
     private function upsertExternalMonitor(string $name, string $target, string $status): void
     {
-        $stmt = $this->db->prepare("
-            INSERT INTO monitors (name, type, target, current_status, last_check, is_active) 
-            VALUES (?, 'http', ?, ?, NOW(), 1)
-            ON DUPLICATE KEY UPDATE current_status = VALUES(current_status), last_check = NOW()
-        ");
-        $stmt->execute([$name, $target, $status]);
+        // Check if a monitor with this exact target already exists
+        $stmt = $this->db->prepare("SELECT id FROM monitors WHERE target = ? LIMIT 1");
+        $stmt->execute([$target]);
+        $existingId = $stmt->fetchColumn();
+
+        if ($existingId) {
+            // Update existing monitor without creating duplicates
+            $update = $this->db->prepare("
+                UPDATE monitors 
+                SET current_status = ?, last_check = NOW() 
+                WHERE id = ?
+            ");
+            $update->execute([$status, $existingId]);
+        } else {
+            // Insert initial monitor entry
+            $insert = $this->db->prepare("
+                INSERT INTO monitors (name, type, target, current_status, last_check, is_active) 
+                VALUES (?, 'http', ?, ?, NOW(), 1)
+            ");
+            $insert->execute([$name, $target, $status]);
+        }
     }
 }
