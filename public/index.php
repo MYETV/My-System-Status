@@ -44,13 +44,15 @@ $router = new \App\Core\Router();
 // PUBLIC ROUTES
 // ==========================================
 $router->get('/', [\App\Controllers\StatusPageController::class, 'index']);
-$router->post('/subscribe', [\App\Controllers\StatusPageController::class, 'subscribe']);
-$router->get('/subscribe/verify', [\App\Controllers\StatusPageController::class, 'verify']);
-$router->get('/subscribe/unsubscribe', [\App\Controllers\StatusPageController::class, 'unsubscribe']);
 $router->get('/timezone/set', [\App\Controllers\TimezoneController::class, 'set']);
 $router->post('/timezone/set', [\App\Controllers\TimezoneController::class, 'set']);
 $router->get('/api/v1/alerts', [\App\Controllers\Api\AlertController::class, 'getActiveAlerts']);
-
+// Subscription & Universal Magic Link Unsubscribe
+$router->post('/subscribe', [\App\Controllers\StatusPageController::class, 'subscribe']);
+$router->get('/subscribe/verify', [\App\Controllers\StatusPageController::class, 'verify']);
+$router->get('/subscribe/unsubscribe', [\App\Controllers\StatusPageController::class, 'unsubscribe']);
+$router->post('/subscribe/request-unsubscribe', [\App\Controllers\StatusPageController::class, 'requestUnsubscribe']);
+$router->get('/subscribe/confirm-unsubscribe', [\App\Controllers\StatusPageController::class, 'confirmUnsubscribe']);
 // ==========================================
 // AUTHENTICATION & 2FA ROUTES
 // ==========================================
