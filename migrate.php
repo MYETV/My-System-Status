@@ -25,40 +25,49 @@ if (!isset($pdo)) {
 }
 
 /**
- * Helper: Check if a column exists in a given table
+ * Helper: Check if a column exists in a given table via information_schema
  */
 function column_exists(PDO $pdo, string $table, string $column): bool {
     try {
-        $stmt = $pdo->prepare("SHOW COLUMNS FROM `$table` LIKE ?");
-        $stmt->execute([$column]);
-        return (bool) $stmt->fetch();
-    } catch (Exception $e) {
+        $stmt = $pdo->prepare("
+            SELECT COUNT(*) FROM information_schema.columns 
+            WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?
+        ");
+        $stmt->execute([$table, $column]);
+        return (bool)$stmt->fetchColumn();
+    } catch (\Throwable $e) {
         return false;
     }
 }
 
 /**
- * Helper: Check if an index exists in a given table
+ * Helper: Check if an index exists in a given table via information_schema
  */
 function index_exists(PDO $pdo, string $table, string $indexName): bool {
     try {
-        $stmt = $pdo->prepare("SHOW INDEX FROM `$table` WHERE Key_name = ?");
-        $stmt->execute([$indexName]);
-        return (bool) $stmt->fetch();
-    } catch (Exception $e) {
+        $stmt = $pdo->prepare("
+            SELECT COUNT(*) FROM information_schema.statistics 
+            WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?
+        ");
+        $stmt->execute([$table, $indexName]);
+        return (bool)$stmt->fetchColumn();
+    } catch (\Throwable $e) {
         return false;
     }
 }
 
 /**
- * Helper: Check if a table exists in the database
+ * Helper: Check if a table exists in the database via information_schema
  */
 function table_exists(PDO $pdo, string $table): bool {
     try {
-        $stmt = $pdo->prepare("SHOW TABLES LIKE ?");
+        $stmt = $pdo->prepare("
+            SELECT COUNT(*) FROM information_schema.tables 
+            WHERE table_schema = DATABASE() AND table_name = ?
+        ");
         $stmt->execute([$table]);
-        return (bool) $stmt->fetch();
-    } catch (Exception $e) {
+        return (bool)$stmt->fetchColumn();
+    } catch (\Throwable $e) {
         return false;
     }
 }
