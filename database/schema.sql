@@ -74,15 +74,18 @@ CREATE TABLE IF NOT EXISTS `monitor_logs` (
     FOREIGN KEY (`monitor_id`) REFERENCES `monitors` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Incidents
+-- Incidents (Includes monitor_id for target probe association)
 CREATE TABLE IF NOT EXISTS `incidents` (
     `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    `monitor_id` INT UNSIGNED NULL DEFAULT NULL,
     `title` VARCHAR(255) NOT NULL,
     `impact` ENUM('none', 'minor', 'major', 'critical') NOT NULL DEFAULT 'minor',
     `status` ENUM('investigating', 'identified', 'monitoring', 'resolved') NOT NULL DEFAULT 'investigating',
     `ai_summary` TEXT NULL,
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX `idx_inc_monitor` (`monitor_id`),
+    FOREIGN KEY (`monitor_id`) REFERENCES `monitors` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Incident Updates (Timeline)
@@ -95,15 +98,18 @@ CREATE TABLE IF NOT EXISTS `incident_updates` (
     FOREIGN KEY (`incident_id`) REFERENCES `incidents` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Scheduled Maintenance
+-- Scheduled Maintenance (Includes monitor_id for target probe association)
 CREATE TABLE IF NOT EXISTS `maintenances` (
     `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    `monitor_id` INT UNSIGNED NULL DEFAULT NULL,
     `title` VARCHAR(255) NOT NULL,
     `description` TEXT NOT NULL,
     `status` ENUM('scheduled', 'in_progress', 'completed') DEFAULT 'scheduled',
     `start_time` DATETIME NOT NULL,
     `end_time` DATETIME NOT NULL,
-    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX `idx_maint_monitor` (`monitor_id`),
+    FOREIGN KEY (`monitor_id`) REFERENCES `monitors` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Subscribers (Granular per-probe or all services alerts)
