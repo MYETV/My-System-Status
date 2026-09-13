@@ -109,8 +109,45 @@ try {
         }
     }
 
+    // --- v1.0.6: Granular subscriptions & time-limited unsubscribe requests ---
+    if (table_exists($pdo, 'subscribers')) {
+        // Drop legacy unique index on email if it exists
+        if (index_exists($pdo, 'subscribers', 'email')) {
+            $pdo->exec("ALTER TABLE `subscribers` DROP INDEX `email`;");
+        }
+        // Add monitor_id column for single-probe subscriptions
+        if (!column_exists($pdo, 'subscribers', 'monitor_id')) {
+            $pdo->exec("ALTER TABLE `subscribers` ADD COLUMN `monitor_id` INT UNSIGNED NULL DEFAULT NULL AFTER `email`;");
+        }
+        // Add composite unique key
+        if (!index_exists($pdo, 'subscribers', 'uniq_sub_email_monitor')) {
+            $pdo->exec("ALTER TABLE `subscribers` ADD UNIQUE KEY `uniq_sub_email_monitor` (`email`, `monitor_id`);");
+        }
+        // Add index and foreign key
+        if (!index_exists($pdo, 'subscribers', 'idx_monitor_id')) {
+            $pdo->exec("ALTER TABLE `subscribers` ADD INDEX `idx_monitor_id` (`monitor_id`);");
+            try {
+                $pdo->exec("ALTER TABLE `subscribers` ADD CONSTRAINT `fk_sub_monitor` FOREIGN KEY (`monitor_id`) REFERENCES `monitors` (`id`) ON DELETE CASCADE;");
+            } catch (\Throwable $e) {
+                // Ignore if foreign key exists
+            }
+        }
+    }
+
+    // Create unsubscribe_requests table for 60-minute magic links
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS `unsubscribe_requests` (
+            `id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            `email` VARCHAR(191) NOT NULL,
+            `token` VARCHAR(64) NOT NULL UNIQUE,
+            `expires_at` DATETIME NOT NULL,
+            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX `idx_token` (`token`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    ");
+
     if (php_sapi_name() === 'cli') {
-        echo "Database migrations are up to date.\n";
+        echo "Database schema is fully up to date.\n";
     }
 
 } catch (Exception $e) {
