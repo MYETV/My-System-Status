@@ -71,6 +71,7 @@ $router->get('/admin', [\App\Controllers\Admin\DashboardController::class, 'inde
 $router->get('/admin/monitors', [\App\Controllers\Admin\MonitorController::class, 'index']);
 $router->post('/admin/monitors/store', [\App\Controllers\Admin\MonitorController::class, 'store']);
 $router->post('/admin/monitors/delete', [\App\Controllers\Admin\MonitorController::class, 'delete']);
+$router->post('/admin/monitors/save-order', [\App\Controllers\Admin\MonitorController::class, 'saveOrder']);
 
 // Incidents & AI
 $router->get('/admin/incidents', [\App\Controllers\Admin\IncidentController::class, 'index']);
