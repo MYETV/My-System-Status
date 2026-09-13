@@ -25,10 +25,12 @@ class UpdaterController
     {
         $currentVersion = $this->updater->getCurrentVersion();
         $updateInfo     = $this->updater->checkForUpdates();
+        $permCheck      = $this->updater->checkWritePermissions();
 
         View::render('admin/updater/index', [
             'currentVersion' => $currentVersion,
-            'updateInfo'     => $updateInfo
+            'updateInfo'     => $updateInfo,
+            'permCheck'      => $permCheck
         ]);
     }
 
