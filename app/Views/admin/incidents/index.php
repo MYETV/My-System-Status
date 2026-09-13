@@ -1,4 +1,9 @@
 <!-- path: app/Views/admin/incidents/index.php -->
+<?php
+// Fallbacks to avoid unhandled variable notices
+$activeIncidents   = $activeIncidents ?? [];
+$resolvedIncidents = $resolvedIncidents ?? [];
+?>
 <div class="container-fluid py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
@@ -155,7 +160,6 @@
                                         <small class="text-muted"><?= format_date($inc['updated_at'], 'M d, Y H:i') ?></small>
                                     </td>
                                     <td class="text-end">
-                                        <!-- Reopen button -->
                                         <button class="btn btn-sm btn-outline-warning me-1" 
                                                 onclick="openUpdateModal(<?= $inc['id'] ?>, '<?= htmlspecialchars(addslashes($inc['title'])) ?>', 'monitoring')"
                                                 title="Reopen Incident">
