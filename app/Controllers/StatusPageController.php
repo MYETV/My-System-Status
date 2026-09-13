@@ -109,6 +109,31 @@ class StatusPageController
             }
         }
 
+        // 7. Real 90-Day Historical Day-by-Day Aggregation (Detects Blackouts, Outages, and Uptime)
+        $histStmt = $this->db->query("
+            SELECT monitor_id, DATE(created_at) as check_date,
+                   SUM(status = 'blackout') as blackout_count,
+                   SUM(status = 'down') as down_count,
+                   SUM(status = 'up') as up_count,
+                   COUNT(*) as total_checks
+            FROM monitor_logs
+            WHERE created_at >= DATE_SUB(NOW(), INTERVAL 90 DAY)
+            GROUP BY monitor_id, DATE(created_at)
+        ");
+        $historyRows = $histStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $uptimeHistory = [];
+        foreach ($historyRows as $row) {
+            $mId  = (int)$row['monitor_id'];
+            $date = $row['check_date'];
+            $uptimeHistory[$mId][$date] = [
+                'blackout' => (int)$row['blackout_count'],
+                'down'     => (int)$row['down_count'],
+                'up'       => (int)$row['up_count'],
+                'total'    => (int)$row['total_checks']
+            ];
+        }
+
         View::render('public/index', [
             'monitors'          => $cleanMonitors,
             'primaryMonitors'   => $primaryMonitors,
@@ -117,6 +142,7 @@ class StatusPageController
             'maintenances'      => $maintenances,
             'primaryStatus'     => $primaryStatus,
             'secondaryStatus'   => $secondaryStatus,
+            'uptimeHistory'     => $uptimeHistory, // Real day-by-day telemetry
             'overallStatus'     => $primaryStatus
         ], 'layouts/public');
     }
