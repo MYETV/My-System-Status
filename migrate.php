@@ -69,63 +69,36 @@ try {
     // =========================================================================
     // When releasing a new version that requires schema changes, add a new block below.
     // Always wrap ALTER operations with existence checks so migrations are idempotent.
-    //
-    // Example 1: Adding a new column to an existing table:
-    // ---------------------------------------------------
-    // if (table_exists($pdo, 'monitors')) {
-    //     if (!column_exists($pdo, 'monitors', 'custom_headers')) {
-    //         $pdo->exec("ALTER TABLE `monitors` ADD COLUMN `custom_headers` TEXT NULL AFTER `target`;");
-    //     }
-    // }
-    //
-    // Example 2: Creating a new table:
-    // ---------------------------------------------------
-    // $pdo->exec("
-    //     CREATE TABLE IF NOT EXISTS `probe_locations` (
-    //         `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    //         `name` VARCHAR(100) NOT NULL,
-    //         `country_code` VARCHAR(2) NOT NULL,
-    //         `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    //     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    // ");
-    //
-    // Example 3: Adding a new database index:
-    // ---------------------------------------------------
-    // if (table_exists($pdo, 'monitor_logs')) {
-    //     if (!index_exists($pdo, 'monitor_logs', 'idx_created_at')) {
-    //         $pdo->exec("ALTER TABLE `monitor_logs` ADD INDEX `idx_created_at` (`created_at`);");
-    //     }
-    // }
     // =========================================================================
 
-    // --- MIGRATION FOR v1.1.0 (Template ready for future releases) ---
-    /*
-    if (table_exists($pdo, 'example_table')) {
-        // Add incremental migration code here
-    }
-    */
-
-    //v1.0.4
+    // --- v1.0.2: Add parent_id for sub-services ---
     if (table_exists($pdo, 'monitors')) {
-        // 1. Add parent_id for grouped sub-services (Cloudflare, etc.)
         if (!column_exists($pdo, 'monitors', 'parent_id')) {
             $pdo->exec("ALTER TABLE `monitors` ADD COLUMN `parent_id` INT UNSIGNED NULL DEFAULT NULL AFTER `id`;");
+        }
+    }
+
+    // --- v1.0.3: Add sort_order for custom display positioning ---
+    if (table_exists($pdo, 'monitors')) {
+        if (!column_exists($pdo, 'monitors', 'sort_order')) {
+            $pdo->exec("ALTER TABLE `monitors` ADD COLUMN `sort_order` INT NOT NULL DEFAULT 0 AFTER `parent_id`;");
+        }
+    }
+
+    // --- v1.0.4: Add index for parent_id ---
+    if (table_exists($pdo, 'monitors')) {
+        if (column_exists($pdo, 'monitors', 'parent_id') && !index_exists($pdo, 'monitors', 'idx_parent_id')) {
             $pdo->exec("ALTER TABLE `monitors` ADD INDEX `idx_parent_id` (`parent_id`);");
         }
-
-    //v1.0.3
-    if (table_exists($pdo, 'monitors')) {
-    if (!column_exists($pdo, 'monitors', 'sort_order')) {
-        $pdo->exec("ALTER TABLE `monitors` ADD COLUMN `sort_order` INT NOT NULL DEFAULT 0 AFTER `parent_id`;");
     }
-}
 
-    //v1.0.2
+    // --- v1.0.5: Add is_primary to distinguish Core vs Secondary services ---
     if (table_exists($pdo, 'monitors')) {
-    if (!column_exists($pdo, 'monitors', 'parent_id')) {
-        $pdo->exec("ALTER TABLE `monitors` ADD COLUMN `parent_id` INT UNSIGNED NULL DEFAULT NULL AFTER `id`;");
+        if (!column_exists($pdo, 'monitors', 'is_primary')) {
+            $pdo->exec("ALTER TABLE `monitors` ADD COLUMN `is_primary` TINYINT(1) DEFAULT 0 AFTER `is_active`;");
+            $pdo->exec("ALTER TABLE `monitors` ADD INDEX `idx_is_primary` (`is_primary`);");
+        }
     }
-}
 
     if (php_sapi_name() === 'cli') {
         echo "Database migrations are up to date.\n";
