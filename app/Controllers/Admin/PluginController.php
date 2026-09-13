@@ -11,7 +11,6 @@ class PluginController
 {
     public function __construct()
     {
-        // Authentication guard
         if (empty($_SESSION['user_id'])) {
             header('Location: /auth/login');
             exit;
@@ -20,35 +19,40 @@ class PluginController
 
     public function index(): void
     {
-        $discordWebhook = SettingService::get('discord_webhook_url');
-        $aiProvider     = SettingService::get('ai_provider', 'gemini');
-        $aiModel        = SettingService::get('ai_model', 'gemini-1.5-flash');
-        $translateEp    = SettingService::get('libretranslate_endpoint', 'https://libretranslate.com');
-
         View::render('admin/plugins/index', [
-            'discordConfigured' => !empty($discordWebhook),
-            'aiProvider'        => $aiProvider,
-            'aiModel'           => $aiModel,
-            'translateEndpoint' => $translateEp
+            'discordConfigured' => !empty(setting('discord_webhook_url')),
+            'aiProvider'        => setting('ai_provider', 'gemini'),
+            'aiModel'           => setting('ai_model', 'gemini-1.5-flash'),
+            'translateEndpoint' => setting('libretranslate_endpoint')
         ]);
     }
 
-    /**
-     * Trigger 1-click external status synchronization for Cloudflare, GitHub, Stripe
-     */
+    public function saveFeedsConfig(): void
+    {
+        $feeds = ['feed_cloudflare_enabled', 'feed_stripe_enabled', 'feed_github_enabled', 'feed_paypal_enabled'];
+        foreach ($feeds as $feed) {
+            SettingService::set($feed, isset($_POST[$feed]) ? '1' : '0');
+        }
+
+        // Run sync immediately to update active states
+        $importer = new ExternalStatusPlugin();
+        $importer->syncAll();
+
+        header('Location: /admin/plugins?saved=1');
+        exit;
+    }
+
     public function syncFeeds(): void
     {
         $importer = new ExternalStatusPlugin();
-        $results = $importer->syncAll();
+        $results  = $importer->syncAll();
 
-        $summary = sprintf(
-            "Cloudflare: %s, GitHub: %s, Stripe: %s",
-            strtoupper($results['cloudflare']),
-            strtoupper($results['github']),
-            strtoupper($results['stripe'])
-        );
+        $parts = [];
+        foreach ($results as $service => $st) {
+            $parts[] = ucfirst($service) . ': ' . strtoupper($st);
+        }
 
-        header('Location: /admin/plugins?synced=1&summary=' . urlencode($summary));
+        header('Location: /admin/plugins?synced=1&summary=' . urlencode(implode(', ', $parts)));
         exit;
     }
 }
