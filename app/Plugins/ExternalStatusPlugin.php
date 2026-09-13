@@ -15,9 +15,13 @@ class ExternalStatusPlugin
         $this->db = Database::getInstance();
     }
 
-    public function syncAll(): array
+    /**
+     * Synchronize external status feeds.
+     * Pass $forceInsert = true when explicitly triggered from the Admin UI.
+     */
+    public function syncAll(bool $forceInsert = false): array
     {
-        // 0. Auto-cleanup: remove any historical duplicates on target
+        // 0. Auto-cleanup: remove historical duplicates
         $this->db->exec("
             DELETE m1 FROM monitors m1 
             INNER JOIN monitors m2 ON m1.target = m2.target 
@@ -28,45 +32,45 @@ class ExternalStatusPlugin
 
         // 1. Cloudflare Public Services
         if (setting('feed_cloudflare_enabled', '1') === '1') {
-            $results['cloudflare'] = $this->syncCloudflare();
+            $results['cloudflare'] = $this->syncCloudflare($forceInsert);
         } else {
             $this->disableFeedMonitors('https://www.cloudflarestatus.com');
         }
 
-        // 2. Custom Cloudflare Zero Trust Tunnel (Own Infrastructure)
-        $this->syncCustomCloudflareTunnel();
+        // 2. Custom Cloudflare Zero Trust Tunnel
+        $this->syncCustomCloudflareTunnel($forceInsert);
 
         // 3. Amazon AWS
         if (setting('feed_aws_enabled', '1') === '1') {
-            $results['aws'] = $this->syncAws();
+            $results['aws'] = $this->syncAws($forceInsert);
         } else {
             $this->disableFeedMonitors('https://health.aws.amazon.com');
         }
 
         // 4. Microsoft Azure
         if (setting('feed_azure_enabled', '1') === '1') {
-            $results['azure'] = $this->syncAzure();
+            $results['azure'] = $this->syncAzure($forceInsert);
         } else {
             $this->disableFeedMonitors('https://azure.status.microsoft');
         }
 
         // 5. Stripe
         if (setting('feed_stripe_enabled', '1') === '1') {
-            $results['stripe'] = $this->syncStripe();
+            $results['stripe'] = $this->syncStripe($forceInsert);
         } else {
             $this->disableFeedMonitors('https://status.stripe.com');
         }
 
         // 6. PayPal
         if (setting('feed_paypal_enabled', '1') === '1') {
-            $results['paypal'] = $this->syncPayPal();
+            $results['paypal'] = $this->syncPayPal($forceInsert);
         } else {
             $this->disableFeedMonitors('https://www.paypal-status.com');
         }
 
         // 7. GitHub
         if (setting('feed_github_enabled', '1') === '1') {
-            $results['github'] = $this->syncGitHub();
+            $results['github'] = $this->syncGitHub($forceInsert);
         } else {
             $this->disableFeedMonitors('https://www.githubstatus.com');
         }
@@ -280,23 +284,15 @@ class ExternalStatusPlugin
     }
 
     /**
-     * Update existing monitor status without re-creating deleted probes.
-     *
-     * @param string $name
-     * @param string $target
-     * @param string $status
-     * @param int|null $parentId
-     * @param int $isPrimary
-     * @return int
+     * Update existing monitor status or insert if forceInsert is true.
      */
-    private function upsertMonitor(string $name, string $target, string $status, ?int $parentId, int $isPrimary = 0): int
+    private function upsertMonitor(string $name, string $target, string $status, ?int $parentId, int $isPrimary = 0, bool $forceInsert = false): int
     {
         $stmt = $this->db->prepare("SELECT id, is_active FROM monitors WHERE target = ? LIMIT 1");
         $stmt->execute([$target]);
         $existing = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if ($existing) {
-            // Update the monitor status only if it is currently active
             if ((int)$existing['is_active'] === 1) {
                 $update = $this->db->prepare("
                     UPDATE monitors 
@@ -308,7 +304,16 @@ class ExternalStatusPlugin
             return (int)$existing['id'];
         }
 
-        // Do not insert new records if the probe was deleted by the user
+        // Allow creating new monitors only if explicitly requested by Admin UI action
+        if ($forceInsert) {
+            $insert = $this->db->prepare("
+                INSERT INTO monitors (name, type, target, parent_id, sort_order, is_primary, current_status, last_check, is_active) 
+                VALUES (?, 'http', ?, ?, 99, ?, ?, NOW(), 1)
+            ");
+            $insert->execute([$name, $target, $parentId, $isPrimary, $status]);
+            return (int)$this->db->lastInsertId();
+        }
+
         return 0;
     }
 
