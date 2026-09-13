@@ -29,7 +29,10 @@ class PluginController
 
     public function saveFeedsConfig(): void
     {
-        $feeds = ['feed_cloudflare_enabled', 'feed_stripe_enabled', 'feed_github_enabled', 'feed_paypal_enabled'];
+        $feeds = [
+    'feed_cloudflare_enabled', 'feed_aws_enabled', 'feed_azure_enabled',
+    'feed_stripe_enabled', 'feed_github_enabled', 'feed_paypal_enabled'
+];
         foreach ($feeds as $feed) {
             SettingService::set($feed, isset($_POST[$feed]) ? '1' : '0');
         }
