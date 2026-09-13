@@ -110,31 +110,6 @@ class StatusPageController
         ], 'layouts/public');
     }
 
-    public function subscribe(): void
-    {
-        $email = filter_var($_POST['email'] ?? '', FILTER_VALIDATE_EMAIL);
-        $smtpHost = setting('smtp_host', '');
-
-        if ($email && !empty($smtpHost)) {
-            $smtpConfig = [
-                'host'       => $smtpHost,
-                'port'       => setting('smtp_port', '587'),
-                'username'   => setting('smtp_user', ''),
-                'password'   => setting('smtp_pass', ''),
-                'encryption' => setting('smtp_encryption', 'starttls'),
-                'from_email' => setting('smtp_from', ''),
-                'from_name'  => setting('app_name', 'My System Status')
-            ];
-
-            $mailer = new MailerService($smtpConfig);
-            $subscriberService = new SubscriberService($mailer);
-            $subscriberService->subscribe($email);
-        }
-
-        header('Location: /?subscribed=1');
-        exit;
-    }
-
     public function verify(): void
     {
         $token = trim($_GET['token'] ?? '');
@@ -156,6 +131,106 @@ class StatusPageController
         }
 
         header('Location: /?unsubscribed=1');
+        exit;
+    }
+
+    public function subscribe(): void
+    {
+        $email     = filter_var($_POST['email'] ?? '', FILTER_VALIDATE_EMAIL);
+        $monitorId = !empty($_POST['monitor_id']) ? (int)$_POST['monitor_id'] : null;
+        $smtpHost  = setting('smtp_host', '');
+
+        if (!$email || empty($smtpHost)) {
+            header('Location: /?error=' . urlencode('Email address invalid or SMTP not configured.'));
+            exit;
+        }
+
+        $smtpConfig = [
+            'host'       => $smtpHost,
+            'port'       => setting('smtp_port', '587'),
+            'username'   => setting('smtp_user', ''),
+            'password'   => setting('smtp_pass', ''),
+            'encryption' => setting('smtp_encryption', 'starttls'),
+            'from_email' => setting('smtp_from', ''),
+            'from_name'  => setting('app_name', 'My System Status')
+        ];
+
+        $mailer = new MailerService($smtpConfig);
+        $subscriberService = new SubscriberService($mailer);
+        $res = $subscriberService->subscribe($email, $monitorId);
+
+        if ($res['status'] === 'error') {
+            header('Location: /?sub_error=' . urlencode($res['message']));
+        } else {
+            header('Location: /?sub_success=' . urlencode($res['message']));
+        }
+        exit;
+    }
+
+    /**
+     * Public user requests time-limited unsubscribe magic link
+     */
+    public function requestUnsubscribe(): void
+    {
+        $email    = filter_var($_POST['email'] ?? '', FILTER_VALIDATE_EMAIL);
+        $smtpHost = setting('smtp_host', '');
+
+        if ($email && !empty($smtpHost)) {
+            $smtpConfig = [
+                'host'       => $smtpHost,
+                'port'       => setting('smtp_port', '587'),
+                'username'   => setting('smtp_user', ''),
+                'password'   => setting('smtp_pass', ''),
+                'encryption' => setting('smtp_encryption', 'starttls'),
+                'from_email' => setting('smtp_from', ''),
+                'from_name'  => setting('app_name', 'My System Status')
+            ];
+
+            $mailer = new MailerService($smtpConfig);
+            $subscriberService = new SubscriberService($mailer);
+            $res = $subscriberService->requestUnsubscribeLink($email);
+
+            if ($res['status'] === 'error') {
+                header('Location: /?unsub_error=' . urlencode($res['message']));
+            } else {
+                header('Location: /?unsub_sent=1');
+            }
+            exit;
+        }
+
+        header('Location: /?unsub_error=' . urlencode('Please provide a valid email address.'));
+        exit;
+    }
+
+    /**
+     * User clicks time-limited link in email to purge all their subscriptions
+     */
+    public function confirmUnsubscribe(): void
+    {
+        $token    = trim($_GET['token'] ?? '');
+        $smtpHost = setting('smtp_host', '');
+
+        if ($token && !empty($smtpHost)) {
+            $smtpConfig = [
+                'host'       => $smtpHost,
+                'port'       => setting('smtp_port', '587'),
+                'username'   => setting('smtp_user', ''),
+                'password'   => setting('smtp_pass', ''),
+                'encryption' => setting('smtp_encryption', 'starttls'),
+                'from_email' => setting('smtp_from', ''),
+                'from_name'  => setting('app_name', 'My System Status')
+            ];
+
+            $mailer = new MailerService($smtpConfig);
+            $subscriberService = new SubscriberService($mailer);
+            
+            if ($subscriberService->confirmUnsubscribe($token)) {
+                header('Location: /?unsub_success=1');
+                exit;
+            }
+        }
+
+        header('Location: /?unsub_error=' . urlencode('This unsubscribe link is invalid or has expired (links expire in 60 minutes).'));
         exit;
     }
 }
