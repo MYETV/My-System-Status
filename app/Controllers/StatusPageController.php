@@ -21,7 +21,7 @@ class StatusPageController
 
     public function index(): void
     {
-        // 1. Fetch only root monitors (no parent_id) ordered by custom sort order
+        // 1. Fetch root monitors ordered by custom sort order
         $stmt = $this->db->query("
             SELECT * FROM monitors 
             WHERE is_active = 1 AND parent_id IS NULL 
@@ -29,7 +29,7 @@ class StatusPageController
         ");
         $monitors = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        // 2. Attach child sub-services to each parent monitor (e.g. Cloudflare Workers, DNS, CDN)
+        // 2. Attach sub-services to each parent
         foreach ($monitors as &$m) {
             $childStmt = $this->db->prepare("
                 SELECT * FROM monitors 
@@ -48,7 +48,7 @@ class StatusPageController
             ORDER BY start_time ASC
         ")->fetchAll(PDO::FETCH_ASSOC);
 
-        // 4. Active Incidents with chronological updates
+        // 4. Active Incidents with updates
         $incidents = $this->db->query("
             SELECT * FROM incidents 
             WHERE status != 'resolved' 
@@ -65,48 +65,48 @@ class StatusPageController
             $incident['updates'] = $upStmt->fetchAll(PDO::FETCH_ASSOC);
         }
 
-        // 5. Intelligent overall status calculation based on Primary vs Secondary services
-        $overallStatus      = 'operational';
-        $hasPrimaryDown     = false;
-        $hasPrimaryDegraded = false;
-        $hasAnyDegraded     = false;
+        // 5. SEPARATE HEALTH CALCULATIONS: Primary vs Secondary
+        $primaryMonitors   = array_values(array_filter($monitors, fn($m) => ((int)($m['is_primary'] ?? 0) === 1)));
+        $secondaryMonitors = array_values(array_filter($monitors, fn($m) => ((int)($m['is_primary'] ?? 0) === 0)));
 
-        foreach ($monitors as $m) {
-            $isPrimary = ((int)($m['is_primary'] ?? 0) === 1);
-
-            // Check parent monitor status
+        // A. Primary Core Health (Powers Top Banner)
+        $primaryStatus = 'operational';
+        foreach ($primaryMonitors as $m) {
             if ($m['current_status'] === 'down') {
-                if ($isPrimary) {
-                    $hasPrimaryDown = true;
-                } else {
-                    $hasAnyDegraded = true;
-                }
-            } elseif ($m['current_status'] === 'degraded') {
-                if ($isPrimary) {
-                    $hasPrimaryDegraded = true;
-                }
-                $hasAnyDegraded = true;
-            }
-
-            // Check sub-services status (treated as secondary infrastructure)
-            foreach ($m['children'] as $child) {
-                if ($child['current_status'] === 'down' || $child['current_status'] === 'degraded') {
-                    $hasAnyDegraded = true;
-                }
+                $primaryStatus = 'major_outage';
+                break;
+            } elseif ($m['current_status'] === 'degraded' && $primaryStatus !== 'major_outage') {
+                $primaryStatus = 'degraded';
             }
         }
 
-        if ($hasPrimaryDown) {
-            $overallStatus = 'major_outage'; // RED: Critical Core Service is down
-        } elseif ($hasPrimaryDegraded || $hasAnyDegraded) {
-            $overallStatus = 'degraded';     // YELLOW: Partial Outage or External Dependency issue
+        // B. Secondary External Health (Powers Third-Party Section Banner)
+        $secondaryStatus = 'operational';
+        foreach ($secondaryMonitors as $m) {
+            if ($m['current_status'] === 'down') {
+                $secondaryStatus = 'major_outage';
+            } elseif ($m['current_status'] === 'degraded' && $secondaryStatus !== 'major_outage') {
+                $secondaryStatus = 'degraded';
+            }
+
+            foreach ($m['children'] as $child) {
+                if ($child['current_status'] === 'down') {
+                    $secondaryStatus = 'major_outage';
+                } elseif ($child['current_status'] === 'degraded' && $secondaryStatus !== 'major_outage') {
+                    $secondaryStatus = 'degraded';
+                }
+            }
         }
 
         View::render('public/index', [
-            'monitors'      => $monitors,
-            'incidents'     => $incidents,
-            'maintenances'  => $maintenances,
-            'overallStatus' => $overallStatus
+            'monitors'          => $monitors,
+            'primaryMonitors'   => $primaryMonitors,
+            'secondaryMonitors' => $secondaryMonitors,
+            'incidents'         => $incidents,
+            'maintenances'      => $maintenances,
+            'primaryStatus'     => $primaryStatus,
+            'secondaryStatus'   => $secondaryStatus,
+            'overallStatus'     => $primaryStatus // Embed widgets only alert if core services fail
         ], 'layouts/public');
     }
 
