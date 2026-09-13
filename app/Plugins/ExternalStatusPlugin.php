@@ -21,6 +21,8 @@ class ExternalStatusPlugin
      */
     public function syncAll(bool $forceInsert = false): array
     {
+        $this->forceInsert = $forceInsert;
+
         // 0. Auto-cleanup: remove historical duplicates
         $this->db->exec("
             DELETE m1 FROM monitors m1 
@@ -32,45 +34,45 @@ class ExternalStatusPlugin
 
         // 1. Cloudflare Public Services
         if (setting('feed_cloudflare_enabled', '1') === '1') {
-            $results['cloudflare'] = $this->syncCloudflare($forceInsert);
+            $results['cloudflare'] = $this->syncCloudflare();
         } else {
             $this->disableFeedMonitors('https://www.cloudflarestatus.com');
         }
 
         // 2. Custom Cloudflare Zero Trust Tunnel
-        $this->syncCustomCloudflareTunnel($forceInsert);
+        $this->syncCustomCloudflareTunnel();
 
         // 3. Amazon AWS
         if (setting('feed_aws_enabled', '1') === '1') {
-            $results['aws'] = $this->syncAws($forceInsert);
+            $results['aws'] = $this->syncAws();
         } else {
             $this->disableFeedMonitors('https://health.aws.amazon.com');
         }
 
         // 4. Microsoft Azure
         if (setting('feed_azure_enabled', '1') === '1') {
-            $results['azure'] = $this->syncAzure($forceInsert);
+            $results['azure'] = $this->syncAzure();
         } else {
             $this->disableFeedMonitors('https://azure.status.microsoft');
         }
 
         // 5. Stripe
         if (setting('feed_stripe_enabled', '1') === '1') {
-            $results['stripe'] = $this->syncStripe($forceInsert);
+            $results['stripe'] = $this->syncStripe();
         } else {
             $this->disableFeedMonitors('https://status.stripe.com');
         }
 
         // 6. PayPal
         if (setting('feed_paypal_enabled', '1') === '1') {
-            $results['paypal'] = $this->syncPayPal($forceInsert);
+            $results['paypal'] = $this->syncPayPal();
         } else {
             $this->disableFeedMonitors('https://www.paypal-status.com');
         }
 
         // 7. GitHub
         if (setting('feed_github_enabled', '1') === '1') {
-            $results['github'] = $this->syncGitHub($forceInsert);
+            $results['github'] = $this->syncGitHub();
         } else {
             $this->disableFeedMonitors('https://www.githubstatus.com');
         }
@@ -283,10 +285,7 @@ class ExternalStatusPlugin
         return $status;
     }
 
-    /**
-     * Update existing monitor status or insert if forceInsert is true.
-     */
-    private function upsertMonitor(string $name, string $target, string $status, ?int $parentId, int $isPrimary = 0, bool $forceInsert = false): int
+    private function upsertMonitor(string $name, string $target, string $status, ?int $parentId, int $isPrimary = 0): int
     {
         $stmt = $this->db->prepare("SELECT id, is_active FROM monitors WHERE target = ? LIMIT 1");
         $stmt->execute([$target]);
@@ -304,8 +303,8 @@ class ExternalStatusPlugin
             return (int)$existing['id'];
         }
 
-        // Allow creating new monitors only if explicitly requested by Admin UI action
-        if ($forceInsert) {
+        // Insert new probe only if sync was explicitly triggered from Admin UI
+        if ($this->forceInsert) {
             $insert = $this->db->prepare("
                 INSERT INTO monitors (name, type, target, parent_id, sort_order, is_primary, current_status, last_check, is_active) 
                 VALUES (?, 'http', ?, ?, 99, ?, ?, NOW(), 1)
