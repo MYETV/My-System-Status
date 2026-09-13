@@ -60,10 +60,11 @@ $locale  = I18n::getLocale();
             opacity: 0.85;
             z-index: 10;
         }
-        .uptime-operational { background-color: #10b981; }
-        .uptime-degraded    { background-color: #f59e0b; }
-        .uptime-outage      { background-color: #ef4444; }
-        .uptime-nodata      { background-color: #e2e8f0; }
+        .uptime-operational { background-color: #10b981; } /* Emerald Green */
+        .uptime-degraded    { background-color: #f59e0b; } /* Amber Yellow */
+        .uptime-outage      { background-color: #ef4444; } /* Red */
+        .uptime-blackout    { background-color: #0f172a; } /* Black / Slate Dark */
+        .uptime-nodata      { background-color: #e2e8f0; } /* Light Gray */
 
         /* Custom Tooltip Styling */
         .tooltip-inner {
