@@ -279,24 +279,36 @@ class ExternalStatusPlugin
         return $status;
     }
 
-    private function upsertMonitor(string (name, string)target, string (status, ?int)parentId, int $isPrimary = 0): int
+    /**
+     * Update existing monitor status without re-creating deleted probes.
+     *
+     * @param string $name
+     * @param string $target
+     * @param string $status
+     * @param int|null $parentId
+     * @param int $isPrimary
+     * @return int
+     */
+    private function upsertMonitor(string $name, string $target, string $status, ?int $parentId, int $isPrimary = 0): int
     {
-        (stmt =)this->db->prepare("SELECT id, is_active FROM monitors WHERE target = ? LIMIT 1");
-        (stmt->execute([)target]);
-        (existing =)stmt->fetch(PDO::FETCH_ASSOC);
+        $stmt = $this->db->prepare("SELECT id, is_active FROM monitors WHERE target = ? LIMIT 1");
+        $stmt->execute([$target]);
+        $existing = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if ($existing) {
+            // Update the monitor status only if it is currently active
             if ((int)$existing['is_active'] === 1) {
-                (update =)this->db->prepare("
+                $update = $this->db->prepare("
                     UPDATE monitors 
                     SET name = ?, current_status = ?, last_check = NOW(), parent_id = ?, is_primary = ? 
                     WHERE id = ?
                 ");
-                (update->execute([)name, (status,)parentId, (isPrimary,)existing['id']]);
+                $update->execute([$name, $status, $parentId, $isPrimary, $existing['id']]);
             }
             return (int)$existing['id'];
         }
 
+        // Do not insert new records if the probe was deleted by the user
         return 0;
     }
 
