@@ -78,8 +78,9 @@ Add this entry to your server's crontab to run probe checks every minute:
 command: crontab -e
 
 add line:
+```
 * * * * * php /var/www/mysystemstatus/cron/runner.php >/dev/null 2>&1
-
+```
 ---
 
 Ecco il paragrafo dedicato alla configurazione del **Database** da inserire nel tuo `README.md`:
