@@ -82,25 +82,35 @@ class ExternalStatusPlugin
             default    => 'down'
         };
 
-        // Upsert Main Parent Monitor
+        // 1. Upsert Main Parent Monitor (Secondary external dependency)
         $parentId = $this->upsertMonitor('Cloudflare Global Network', 'https://www.cloudflarestatus.com', $parentStatus, null);
 
-        // Dynamically loop through all sub-services (Workers, Pages, DNS, CDN, Stream, etc.)
+        // 2. WHITELIST ONLY the 6 Core Cloudflare Services (strictly ignore the 400+ individual colos)
+        $coreServicesWhitelist = [
+            'Cloudflare Workers'   => 'Workers & Pages Platform',
+            'Authoritative DNS'    => 'Authoritative DNS Service',
+            'CDN / Cache'          => 'Edge CDN & Cache Network',
+            'Cloudflare Dashboard' => 'Dashboard & Control Panel',
+            'Cloudflare Access'    => 'Zero Trust & Access Gateway',
+            'Turnstile'            => 'Turnstile Captcha Engine'
+        ];
+
         $components = $data['components'] ?? [];
         foreach ($components as $comp) {
-            // Ignore top-level grouping containers
-            if (!empty($comp['group']) || empty($comp['name'])) {
-                continue;
+            $name = $comp['name'] ?? '';
+            foreach ($coreServicesWhitelist as $pattern => $displayName) {
+                if (stripos($name, $pattern) !== false) {
+                    $cStatus = match ($comp['status'] ?? '') {
+                        'operational' => 'operational',
+                        'degraded_performance', 'partial_outage' => 'degraded',
+                        default => 'down'
+                    };
+
+                    $targetSlug = 'https://www.cloudflarestatus.com#' . preg_replace('/[^a-z0-9]/i', '', $pattern);
+                    $this->upsertMonitor("Cloudflare - {$displayName}", $targetSlug, $cStatus, $parentId);
+                    break;
+                }
             }
-
-            $cStatus = match ($comp['status'] ?? '') {
-                'operational' => 'operational',
-                'degraded_performance', 'partial_outage' => 'degraded',
-                default => 'down'
-            };
-
-            $compSlug = preg_replace('/[^a-z0-9_-]/i', '', strtolower($comp['name']));
-            $this->upsertMonitor("Cloudflare - {$comp['name']}", "https://www.cloudflarestatus.com#{$compSlug}", $cStatus, $parentId);
         }
 
         return $parentStatus;
