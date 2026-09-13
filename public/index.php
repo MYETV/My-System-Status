@@ -81,6 +81,8 @@ $router->post('/admin/monitors/save-order', [\App\Controllers\Admin\MonitorContr
 $router->get('/admin/incidents', [\App\Controllers\Admin\IncidentController::class, 'index']);
 $router->post('/admin/incidents/store', [\App\Controllers\Admin\IncidentController::class, 'store']);
 $router->post('/admin/incidents/update-status', [\App\Controllers\Admin\IncidentController::class, 'updateStatus']);
+$router->post('/admin/incidents/update', [\App\Controllers\Admin\IncidentController::class, 'update']);
+$router->post('/admin/incidents/delete', [\App\Controllers\Admin\IncidentController::class, 'delete']);
 $router->post('/admin/incidents/ai-generate', [\App\Controllers\Admin\IncidentController::class, 'generateAiSummary']);
 
 // Maintenance & Calendar
