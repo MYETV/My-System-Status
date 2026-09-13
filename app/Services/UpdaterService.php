@@ -160,13 +160,27 @@ class UpdaterService
     }
 
     /**
-     * Run unified incremental database migrations.
+     * Run unified incremental database migrations with forced OPcache invalidation.
      */
     private function runMigrations(): void
     {
         $migrateScript = dirname(__DIR__, 2) . '/migrate.php';
+        
         if (file_exists($migrateScript)) {
-            require $migrateScript;
+            // 1. Force OPcache to flush so PHP does not execute stale in-memory bytecode
+            if (function_exists('opcache_invalidate')) {
+                @opcache_invalidate($migrateScript, true);
+            }
+            if (function_exists('opcache_reset')) {
+                @opcache_reset();
+            }
+
+            // 2. Execute the fresh migration script from disk
+            try {
+                require $migrateScript;
+            } catch (\Throwable $e) {
+                error_log("Updater Migration Execution Error: " . $e->getMessage());
+            }
         }
     }
 
