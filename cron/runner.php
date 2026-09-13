@@ -3,7 +3,6 @@
 
 declare(strict_types=1);
 
-// CLI execution only
 if (php_sapi_name() !== 'cli') {
     die("CLI access only.\n");
 }
@@ -34,22 +33,35 @@ spl_autoload_register(function ($class) use ($rootDir) {
 require_once $rootDir . '/core/helpers.php';
 
 use App\Services\MonitorService;
+use App\Services\EdgeProbeService;
 use App\Services\SettingService;
 use App\Plugins\ExternalStatusPlugin;
 use App\Core\Database;
 
-echo "[" . date('Y-m-d H:i:s') . "] Starting My System Status Health Checks...\n";
+echo "[" . date('Y-m-d H:i:s') . "] Starting My System Status Dual Health Checks...\n";
 
-// 3. Run Custom Monitor Probes (HTTP, Ping, Port, SSL)
+// 3. Execution Point A: Run Native Local Probes (Origin vantage point)
 try {
     $monitorService = new MonitorService();
     $monitorService->runPendingChecks();
-    echo "[" . date('Y-m-d H:i:s') . "] Custom probes executed successfully.\n";
+    echo "[" . date('Y-m-d H:i:s') . "] Local origin probes executed successfully.\n";
 } catch (\Throwable $e) {
-    echo "[" . date('Y-m-d H:i:s') . "] Error running probes: " . $e->getMessage() . "\n";
+    echo "[" . date('Y-m-d H:i:s') . "] Local probes error: " . $e->getMessage() . "\n";
 }
 
-// 4. Automatically Poll Enabled External Feeds (Cloudflare, AWS, Stripe, etc.)
+// 4. Execution Point B: Run Cloudflare Edge Probes Simultaneously (Global vantage point)
+$edgeEnabled = (setting('edge_worker_enabled', '0') === '1');
+if ($edgeEnabled) {
+    try {
+        $edgeService = new EdgeProbeService();
+        $edgeService->runEdgeChecks();
+        echo "[" . date('Y-m-d H:i:s') . "] Cloudflare Edge Worker probes executed concurrently.\n";
+    } catch (\Throwable $e) {
+        echo "[" . date('Y-m-d H:i:s') . "] Edge Worker check error: " . $e->getMessage() . "\n";
+    }
+}
+
+// 5. Execution Point C: Poll External Cloud Feeds (Cloudflare, AWS, Stripe, etc.)
 try {
     $externalPlugin = new ExternalStatusPlugin();
     $externalPlugin->syncAll();
@@ -58,7 +70,7 @@ try {
     echo "[" . date('Y-m-d H:i:s') . "] Error syncing external feeds: " . $e->getMessage() . "\n";
 }
 
-// 5. Discord Webhook Outage Alerts
+// 6. Discord Webhook Outage Alerts
 $webhookUrl = setting('discord_webhook_url');
 if (!empty($webhookUrl)) {
     try {
@@ -91,4 +103,4 @@ if (!empty($webhookUrl)) {
     }
 }
 
-echo "[" . date('Y-m-d H:i:s') . "] Finished successfully.\n";
+echo "[" . date('Y-m-d H:i:s') . "] Finished all dual checks successfully.\n";
