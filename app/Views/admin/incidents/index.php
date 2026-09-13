@@ -283,6 +283,17 @@ $resolvedIncidents = $resolvedIncidents ?? [];
                     </div>
                 </div>
 
+<div class="mb-3">
+    <label class="form-label fw-semibold">Affected Service (Optional)</label>
+    <select name="monitor_id" class="form-select">
+        <option value="">All Services (Global Incident)</option>
+        <?php foreach ($monitorsList as $m): ?>
+            <option value="<?= $m['id'] ?>"><?= htmlspecialchars($m['name']) ?></option>
+        <?php endforeach; ?>
+    </select>
+    <small class="text-muted">If selected, this incident will color the 90-day bar of that specific service.</small>
+</div>
+
                 <div class="mb-3">
                     <label class="form-label fw-semibold">Technical Error / Raw Logs (for AI analysis)</label>
                     <textarea id="rawErrorDetails" class="form-control" rows="2" placeholder="Paste probe failure log or stack trace here..."></textarea>
