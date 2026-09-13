@@ -89,6 +89,8 @@ $router->post('/admin/incidents/ai-generate', [\App\Controllers\Admin\IncidentCo
 $router->get('/admin/maintenance', [\App\Controllers\Admin\MaintenanceController::class, 'index']);
 $router->get('/admin/maintenance/events', [\App\Controllers\Admin\MaintenanceController::class, 'events']);
 $router->post('/admin/maintenance/store', [\App\Controllers\Admin\MaintenanceController::class, 'store']);
+$router->post('/admin/maintenance/update', [\App\Controllers\Admin\MaintenanceController::class, 'update']);
+$router->post('/admin/maintenance/delete', [\App\Controllers\Admin\MaintenanceController::class, 'delete']);
 
 // Subscribers
 $router->get('/admin/subscribers', [\App\Controllers\Admin\SubscriberController::class, 'index']);
