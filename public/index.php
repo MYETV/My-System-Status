@@ -91,6 +91,7 @@ $router->post('/admin/subscribers/broadcast', [\App\Controllers\Admin\Subscriber
 // Plugins & Integrations
 $router->get('/admin/plugins', [\App\Controllers\Admin\PluginController::class, 'index']);
 $router->post('/admin/plugins/sync-feeds', [\App\Controllers\Admin\PluginController::class, 'syncFeeds']);
+$router->post('/admin/plugins/save-feeds-config', [\App\Controllers\Admin\PluginController::class, 'saveFeedsConfig']);
 
 // Settings Routes
 $router->get('/admin/settings', [\App\Controllers\Admin\SettingController::class, 'index']);
