@@ -139,6 +139,16 @@ if (table_exists($pdo, 'monitor_logs')) {
     $pdo->exec("ALTER TABLE `monitor_logs` MODIFY COLUMN `status` ENUM('up', 'down', 'timeout', 'blackout') NOT NULL;");
 }
 
+// --- v1.0.18: Add monitor_id to incidents and maintenances ---
+if (table_exists($pdo, 'incidents') && !column_exists($pdo, 'incidents', 'monitor_id')) {
+    $pdo->exec("ALTER TABLE `incidents` ADD COLUMN `monitor_id` INT UNSIGNED NULL DEFAULT NULL AFTER `id`;");
+    $pdo->exec("ALTER TABLE `incidents` ADD INDEX `idx_inc_monitor` (`monitor_id`);");
+}
+if (table_exists($pdo, 'maintenances') && !column_exists($pdo, 'maintenances', 'monitor_id')) {
+    $pdo->exec("ALTER TABLE `maintenances` ADD COLUMN `monitor_id` INT UNSIGNED NULL DEFAULT NULL AFTER `id`;");
+    $pdo->exec("ALTER TABLE `maintenances` ADD INDEX `idx_maint_monitor` (`monitor_id`);");
+}
+
 
     if (php_sapi_name() === 'cli') {
         echo "Database schema is fully up to date.\n";
