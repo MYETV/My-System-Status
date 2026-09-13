@@ -40,14 +40,23 @@ class MaintenanceController
         ");
         $past = $stmtPast->fetchAll(PDO::FETCH_ASSOC);
 
+        // 3. Fetch monitors list for modal dropdown selection
+        $monitorsList = $this->db->query("
+            SELECT id, name 
+            FROM monitors 
+            WHERE is_active = 1 
+            ORDER BY sort_order ASC, name ASC
+        ")->fetchAll(PDO::FETCH_ASSOC);
+
         View::render('admin/maintenance/index', [
-            'upcoming' => $upcoming,
-            'past'     => $past
+            'upcoming'     => $upcoming,
+            'past'         => $past,
+            'monitorsList' => $monitorsList
         ]);
     }
 
     /**
-     * Feed for FullCalendar (JSON) with full payload for click-to-edit
+     * Feed for FullCalendar (JSON) with full payload including monitor_id
      */
     public function events(): void
     {
@@ -71,6 +80,7 @@ class MaintenanceController
                 'extendedProps' => [
                     'description' => $ev['description'] ?? '',
                     'status'      => $ev['status'],
+                    'monitor_id'  => $ev['monitor_id'] ?? '',
                     'start_raw'   => date('Y-m-d\TH:i', strtotime($ev['start_time'])),
                     'end_raw'     => date('Y-m-d\TH:i', strtotime($ev['end_time']))
                 ]
@@ -84,6 +94,7 @@ class MaintenanceController
     public function store(): void
     {
         $title       = trim($_POST['title'] ?? '');
+        $monitorId   = !empty($_POST['monitor_id']) ? (int)$_POST['monitor_id'] : null;
         $description = trim($_POST['description'] ?? '');
         $start       = $_POST['start_time'] ?? '';
         $end         = $_POST['end_time'] ?? '';
@@ -91,10 +102,10 @@ class MaintenanceController
 
         if ($title && $start && $end) {
             $stmt = $this->db->prepare("
-                INSERT INTO maintenances (title, description, start_time, end_time, status)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO maintenances (title, monitor_id, description, start_time, end_time, status)
+                VALUES (?, ?, ?, ?, ?, ?)
             ");
-            $stmt->execute([$title, $description, $start, $end, $status]);
+            $stmt->execute([$title, $monitorId, $description, $start, $end, $status]);
         }
 
         header('Location: /admin/maintenance?created=1');
@@ -105,6 +116,7 @@ class MaintenanceController
     {
         $id          = (int)($_POST['maintenance_id'] ?? 0);
         $title       = trim($_POST['title'] ?? '');
+        $monitorId   = !empty($_POST['monitor_id']) ? (int)$_POST['monitor_id'] : null;
         $description = trim($_POST['description'] ?? '');
         $start       = $_POST['start_time'] ?? '';
         $end         = $_POST['end_time'] ?? '';
@@ -113,10 +125,10 @@ class MaintenanceController
         if ($id > 0 && $title && $start && $end) {
             $stmt = $this->db->prepare("
                 UPDATE maintenances 
-                SET title = ?, description = ?, start_time = ?, end_time = ?, status = ? 
+                SET title = ?, monitor_id = ?, description = ?, start_time = ?, end_time = ?, status = ? 
                 WHERE id = ?
             ");
-            $stmt->execute([$title, $description, $start, $end, $status, $id]);
+            $stmt->execute([$title, $monitorId, $description, $start, $end, $status, $id]);
         }
 
         header('Location: /admin/maintenance?updated=1');
