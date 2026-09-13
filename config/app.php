@@ -24,7 +24,7 @@ return [
      * Default & Supported Locales
      */
     'locale'      => 'en',
-    'supported_locales' => ['en', 'it'],
+    'supported_locales' => ['en', 'it', 'es', 'fr', 'de'],
 
     /*
      * Probe Defaults
