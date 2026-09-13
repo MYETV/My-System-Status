@@ -5,6 +5,7 @@ namespace App\Controllers\Admin;
 
 use App\Core\View;
 use App\Services\SettingService;
+use App\Plugins\ExternalStatusPlugin;
 
 class SettingController
 {
@@ -26,10 +27,11 @@ class SettingController
     {
         // 1. Checkbox toggle fields (must be saved as '0' if unchecked)
         $checkboxKeys = [
-    'turnstile_enabled',
-    'rate_limit_enabled',
-    'cf_tunnel_is_primary'
-];
+            'turnstile_enabled',
+            'rate_limit_enabled',
+            'cf_tunnel_is_primary',
+            'edge_worker_enabled'
+        ];
 
         foreach ($checkboxKeys as $cbKey) {
             SettingService::set($cbKey, isset($_POST[$cbKey]) ? '1' : '0');
@@ -47,13 +49,25 @@ class SettingController
             'libretranslate_endpoint', 'libretranslate_api_key',
             'turnstile_site_key', 'turnstile_secret_key',
             'rate_limit_max_attempts', 'rate_limit_lockout_minutes',
-            'discord_webhook_url','cf_tunnel_name', 'cf_tunnel_account_id', 'cf_tunnel_id', 'cf_tunnel_api_token',
+            'discord_webhook_url',
+            // Cloudflare Zero Trust Tunnel
+            'cf_tunnel_name', 'cf_tunnel_account_id', 'cf_tunnel_id', 'cf_tunnel_api_token',
+            // Cloudflare Edge Worker Probes
+            'edge_worker_url', 'edge_worker_token'
         ];
 
         foreach ($textKeys as $key) {
             if (isset($_POST[$key])) {
                 SettingService::set($key, trim($_POST[$key]));
             }
+        }
+
+        // 3. Immediately poll Cloudflare Tunnel if configured so it appears right away
+        try {
+            $plugin = new ExternalStatusPlugin();
+            $plugin->syncCustomCloudflareTunnel();
+        } catch (\Throwable $e) {
+            // Ignore if credentials not yet configured
         }
 
         header('Location: /admin/settings?saved=1');
