@@ -46,7 +46,7 @@ $turnstileSiteKey = setting('turnstile_site_key', '');
             <form action="/auth/authenticate" method="POST">
                 <div class="mb-3">
                     <label class="form-label small fw-semibold">Email address</label>
-                    <input type="email" name="email" class="form-control" required autofocus placeholder="admin@myetv.tv">
+                    <input type="email" name="email" class="form-control" required autofocus placeholder="email@your-domain.com">
                 </div>
                 <div class="mb-3">
                     <label class="form-label small fw-semibold">Password</label>
