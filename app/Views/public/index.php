@@ -1,18 +1,18 @@
 <!-- path: app/Views/public/index.php -->
 <div class="container my-5" style="max-width: 900px;">
-    <!-- Global Status Banner -->
+    <!-- 1. GLOBAL CORE STATUS BANNER (Reflects ONLY Primary Core Systems) -->
     <?php 
-        $badgeClass = match ($overallStatus) {
+        $badgeClass = match ($primaryStatus) {
             'operational'  => 'bg-success',
             'degraded'     => 'bg-warning text-dark',
             'major_outage' => 'bg-danger',
             default        => 'bg-secondary'
         };
-        $statusText = match ($overallStatus) {
-            'operational'  => __('status.operational'),
-            'degraded'     => __('status.degraded'),
-            'major_outage' => __('status.major_outage'),
-            default        => 'Unknown'
+        $statusText = match ($primaryStatus) {
+            'operational'  => 'All Core Systems Operational',
+            'degraded'     => 'Core Performance Degraded',
+            'major_outage' => 'Major Core Service Outage',
+            default        => 'Operational'
         };
     ?>
     <div class="p-4 rounded-3 text-white <?= $badgeClass ?> shadow-sm mb-4 d-flex justify-content-between align-items-center">
@@ -82,7 +82,7 @@
         <?php endforeach; ?>
     <?php endif; ?>
 
-    <!-- Reusable Monitor Row Template Definition -->
+    <!-- Reusable Monitor Row Function -->
     <?php
     $renderMonitorRow = function(array $monitor) {
         $hasChildren = !empty($monitor['children']);
@@ -96,14 +96,12 @@
                 <div class="d-flex align-items-center gap-2">
                     <span class="fw-bold fs-6 text-dark"><?= htmlspecialchars($monitor['name']) ?></span>
                     
-                    <!-- Sub-services Accordion Toggle Badge -->
                     <?php if ($hasChildren): ?>
                         <button class="btn btn-sm btn-outline-secondary py-0 px-2 rounded-pill shadow-none" 
                                 style="font-size: 11px;" 
                                 type="button" 
                                 data-bs-toggle="collapse" 
-                                data-bs-target="#subservices-<?= $monitor['id'] ?>"
-                                aria-expanded="false">
+                                data-bs-target="#subservices-<?= $monitor['id'] ?>">
                             <i class="bi bi-diagram-3 me-1"></i> <?= count($monitor['children']) ?> sub-services <i class="bi bi-chevron-down ms-1"></i>
                         </button>
                     <?php endif; ?>
@@ -170,7 +168,6 @@
                 <?php endfor; ?>
             </div>
 
-            <!-- Graph Footer Legends -->
             <div class="d-flex justify-content-between text-muted small mt-2">
                 <span>90 days ago</span>
                 <span class="fw-semibold text-dark"><?= number_format($uptimePct, 2) ?>% uptime</span>
@@ -198,7 +195,6 @@
                                     </span>
                                 </div>
 
-                                <!-- Sub-service 90-Day Mini Bar -->
                                 <div class="uptime-graph" style="height: 18px;" role="group">
                                     <?php
                                         for ($cDay = 89; $cDay >= 0; $cDay--):
@@ -236,14 +232,11 @@
         <?php
         return ob_get_clean();
     };
-
-    $primaryMonitors   = array_filter($monitors, fn($m) => ((int)($m['is_primary'] ?? 0) === 1));
-    $secondaryMonitors = array_filter($monitors, fn($m) => ((int)($m['is_primary'] ?? 0) === 0));
     ?>
 
-    <!-- 1. PRIMARY CORE INFRASTRUCTURE SECTION -->
+    <!-- 2. PRIMARY CORE INFRASTRUCTURE SECTION -->
     <?php if (!empty($primaryMonitors)): ?>
-        <div class="card shadow-sm border-0 mb-4">
+        <div class="card shadow-sm border-0 mb-5">
             <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
                 <h5 class="mb-0 fw-bold"><i class="bi bi-hdd-rack text-primary me-2"></i>Core Infrastructure & Services</h5>
                 <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 px-2 py-1">
@@ -258,8 +251,36 @@
         </div>
     <?php endif; ?>
 
-    <!-- 2. SECONDARY & EXTERNAL CLOUD DEPENDENCIES SECTION -->
+    <!-- 3. SECONDARY & THIRD-PARTY CLOUD DEPENDENCIES SECTION WITH OWN STATUS BANNER -->
     <?php if (!empty($secondaryMonitors)): ?>
+        <?php
+            $secBannerColor = match ($secondaryStatus) {
+                'operational'  => 'alert-success',
+                'degraded'     => 'alert-warning text-dark border-warning',
+                'major_outage' => 'alert-danger',
+                default        => 'alert-secondary'
+            };
+            $secBannerIcon = match ($secondaryStatus) {
+                'operational'  => 'bi-check-circle-fill text-success',
+                'degraded'     => 'bi-exclamation-triangle-fill text-warning',
+                'major_outage' => 'bi-x-circle-fill text-danger',
+                default        => 'bi-info-circle-fill'
+            };
+            $secStatusMessage = match ($secondaryStatus) {
+                'operational'  => 'All third-party cloud dependencies and external APIs are operating normally.',
+                'degraded'     => 'Some external third-party services are currently reporting degraded performance.',
+                'major_outage' => 'Outage detected across external cloud providers.',
+                default        => 'External dependencies status'
+            };
+        ?>
+        <!-- Dedicated Secondary Systems Banner -->
+        <div class="alert <?= $secBannerColor ?> shadow-sm mb-3 d-flex align-items-center gap-2 py-3 px-4 rounded-3">
+            <i class="bi <?= $secBannerIcon ?> fs-4"></i>
+            <div>
+                <strong>Third-Party Dependencies Status:</strong> <?= $secStatusMessage ?>
+            </div>
+        </div>
+
         <div class="card shadow-sm border-0 mb-4">
             <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
                 <h5 class="mb-0 fw-bold"><i class="bi bi-cloud-check text-secondary me-2"></i>External Cloud & Third-Party Dependencies</h5>
@@ -275,12 +296,12 @@
         </div>
     <?php endif; ?>
 
-    <!-- Fallback if no monitors exist at all -->
+    <!-- Fallback if no monitors exist -->
     <?php if (empty($primaryMonitors) && empty($secondaryMonitors)): ?>
         <div class="card shadow-sm border-0 p-5 text-center text-muted mb-4">
             <i class="bi bi-hdd-network fs-1 mb-2 text-secondary"></i>
             <h5>No Services Configured</h5>
-            <p class="small mb-0">Monitored routes will appear here once configured in the admin dashboard.</p>
+            <p class="small mb-0">Monitored routes will appear here once added in the admin dashboard.</p>
         </div>
     <?php endif; ?>
 </div>
