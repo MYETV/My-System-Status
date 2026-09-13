@@ -69,7 +69,7 @@ sudo chmod -R 755 /var/www/your-domain.com
 
 ### 3. Run the Web Installer	
 Open your browser and navigate to:
-https://mysystemstatus.com/install/
+https://your-domain.com/install/
 
 Follow the graphical wizard to configure your MySQL credentials and create the Super Administrator account.
 
