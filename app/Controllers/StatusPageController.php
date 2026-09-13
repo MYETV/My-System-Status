@@ -67,20 +67,10 @@ class StatusPageController
         }
         unset($incident);
 
-        // 5. Deduplicate Root Monitors by ID to prevent duplicate items in public list
-        $uniqueMonitors = [];
-        foreach ($monitors as $item) {
-            if (!isset($uniqueMonitors[$item['id']])) {
-                $uniqueMonitors[$item['id']] = $item;
-            }
-        }
-        $cleanMonitors = array_values($uniqueMonitors);
+        // 5. Separate Primary vs Secondary Monitors
+        $primaryMonitors   = array_values(array_filter($monitors, fn($m) => ((int)($m['is_primary'] ?? 0) === 1)));
+        $secondaryMonitors = array_values(array_filter($monitors, fn($m) => ((int)($m['is_primary'] ?? 0) === 0)));
 
-        // 6. SEPARATE HEALTH CALCULATIONS: Primary vs Secondary Root Monitors
-        $primaryMonitors   = array_values(array_filter($cleanMonitors, fn($m) => ((int)($m['is_primary'] ?? 0) === 1)));
-        $secondaryMonitors = array_values(array_filter($cleanMonitors, fn($m) => ((int)($m['is_primary'] ?? 0) === 0)));
-
-        // A. Primary Core Health (Powers Top Banner)
         $primaryStatus = 'operational';
         foreach ($primaryMonitors as $m) {
             if ($m['current_status'] === 'down') {
@@ -91,7 +81,6 @@ class StatusPageController
             }
         }
 
-        // B. Secondary External Health (Powers Third-Party Section Banner)
         $secondaryStatus = 'operational';
         foreach ($secondaryMonitors as $m) {
             if ($m['current_status'] === 'down') {
@@ -99,7 +88,6 @@ class StatusPageController
             } elseif ($m['current_status'] === 'degraded' && $secondaryStatus !== 'major_outage') {
                 $secondaryStatus = 'degraded';
             }
-
             foreach ($m['children'] as $child) {
                 if ($child['current_status'] === 'down') {
                     $secondaryStatus = 'major_outage';
@@ -109,7 +97,7 @@ class StatusPageController
             }
         }
 
-        // 7. Real 90-Day Historical Day-by-Day Aggregation (Detects Blackouts, Outages, and Uptime)
+        // 6. Real 90-Day Probe Logs Aggregation
         $histStmt = $this->db->query("
             SELECT monitor_id, DATE(created_at) as check_date,
                    SUM(status = 'blackout') as blackout_count,
@@ -134,15 +122,32 @@ class StatusPageController
             ];
         }
 
+        // 7. Map 90-Day Incidents and Maintenances per Monitor and Date
+        $incStmt = $this->db->query("
+            SELECT id, monitor_id, title, impact, status, created_at, updated_at 
+            FROM incidents 
+            WHERE created_at >= DATE_SUB(NOW(), INTERVAL 90 DAY) OR status != 'resolved'
+        ");
+        $allIncidents = $incStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $maintStmt = $this->db->query("
+            SELECT id, monitor_id, title, description, status, start_time, end_time 
+            FROM maintenances 
+            WHERE start_time >= DATE_SUB(NOW(), INTERVAL 90 DAY) OR end_time >= DATE_SUB(NOW(), INTERVAL 90 DAY)
+        ");
+        $allMaintenances = $maintStmt->fetchAll(PDO::FETCH_ASSOC);
+
         View::render('public/index', [
-            'monitors'          => $cleanMonitors,
+            'monitors'          => $monitors,
             'primaryMonitors'   => $primaryMonitors,
             'secondaryMonitors' => $secondaryMonitors,
             'incidents'         => $incidents,
             'maintenances'      => $maintenances,
             'primaryStatus'     => $primaryStatus,
             'secondaryStatus'   => $secondaryStatus,
-            'uptimeHistory'     => $uptimeHistory, // Real day-by-day telemetry
+            'uptimeHistory'     => $uptimeHistory,
+            'allIncidents'      => $allIncidents,
+            'allMaintenances'   => $allMaintenances,
             'overallStatus'     => $primaryStatus
         ], 'layouts/public');
     }
