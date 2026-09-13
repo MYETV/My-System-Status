@@ -39,6 +39,7 @@ class StatusPageController
             $childStmt->execute([$m['id']]);
             $m['children'] = $childStmt->fetchAll(PDO::FETCH_ASSOC);
         }
+        unset($m);
 
         // 3. Active Maintenances
         $maintenances = $this->db->query("
@@ -64,10 +65,20 @@ class StatusPageController
             $upStmt->execute([$incident['id']]);
             $incident['updates'] = $upStmt->fetchAll(PDO::FETCH_ASSOC);
         }
+        unset($incident);
 
-        // 5. SEPARATE HEALTH CALCULATIONS: Primary vs Secondary
-        $primaryMonitors   = array_values(array_filter($monitors, fn($m) => ((int)($m['is_primary'] ?? 0) === 1)));
-        $secondaryMonitors = array_values(array_filter($monitors, fn($m) => ((int)($m['is_primary'] ?? 0) === 0)));
+        // 5. Deduplicate Root Monitors by ID to prevent duplicate items in public list
+        $uniqueMonitors = [];
+        foreach ($monitors as $item) {
+            if (!isset($uniqueMonitors[$item['id']])) {
+                $uniqueMonitors[$item['id']] = $item;
+            }
+        }
+        $cleanMonitors = array_values($uniqueMonitors);
+
+        // 6. SEPARATE HEALTH CALCULATIONS: Primary vs Secondary Root Monitors
+        $primaryMonitors   = array_values(array_filter($cleanMonitors, fn($m) => ((int)($m['is_primary'] ?? 0) === 1)));
+        $secondaryMonitors = array_values(array_filter($cleanMonitors, fn($m) => ((int)($m['is_primary'] ?? 0) === 0)));
 
         // A. Primary Core Health (Powers Top Banner)
         $primaryStatus = 'operational';
@@ -99,14 +110,14 @@ class StatusPageController
         }
 
         View::render('public/index', [
-            'monitors'          => $monitors,
+            'monitors'          => $cleanMonitors,
             'primaryMonitors'   => $primaryMonitors,
             'secondaryMonitors' => $secondaryMonitors,
             'incidents'         => $incidents,
             'maintenances'      => $maintenances,
             'primaryStatus'     => $primaryStatus,
             'secondaryStatus'   => $secondaryStatus,
-            'overallStatus'     => $primaryStatus // Embed widgets only alert if core services fail
+            'overallStatus'     => $primaryStatus
         ], 'layouts/public');
     }
 
@@ -167,9 +178,6 @@ class StatusPageController
         exit;
     }
 
-    /**
-     * Public user requests time-limited unsubscribe magic link
-     */
     public function requestUnsubscribe(): void
     {
         $email    = filter_var($_POST['email'] ?? '', FILTER_VALIDATE_EMAIL);
@@ -202,9 +210,6 @@ class StatusPageController
         exit;
     }
 
-    /**
-     * User clicks time-limited link in email to purge all their subscriptions
-     */
     public function confirmUnsubscribe(): void
     {
         $token    = trim($_GET['token'] ?? '');
