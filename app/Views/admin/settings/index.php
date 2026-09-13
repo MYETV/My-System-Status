@@ -312,6 +312,35 @@ $allTimezones    = DateService::getTimezonesList();
             <small class="text-muted">Requires <code>Account &gt; Cloudflare Tunnel &gt; Read</code> permissions.</small>
         </div>
     </div>
+
+    <!-- Cloudflare Edge Worker Section -->
+<div class="p-4 bg-light rounded-3 border mb-4">
+    <div class="d-flex align-items-center justify-content-between mb-2">
+        <div class="d-flex align-items-center gap-2">
+            <span class="p-2 bg-primary bg-opacity-10 text-primary rounded-3 fs-4">
+                <i class="bi bi-globe-americas"></i>
+            </span>
+            <div>
+                <h5 class="fw-bold mb-0">Cloudflare Edge Worker Probes (Optional)</h5>
+                <p class="text-muted small mb-0">Delegate probe execution to Cloudflare's edge network for globally distributed latency checks.</p>
+            </div>
+        </div>
+        <div class="form-check form-switch fs-5">
+            <input class="form-check-input" type="checkbox" name="edge_worker_enabled" value="1" id="edgeWorkerSwitch" <?= setting('edge_worker_enabled') === '1' ? 'checked' : '' ?>>
+        </div>
+    </div>
+    <div class="row g-3 mt-1">
+        <div class="col-md-6">
+            <label class="form-label fw-semibold">Worker URL</label>
+            <input type="url" name="edge_worker_url" value="<?= htmlspecialchars(setting('edge_worker_url', '')) ?>" class="form-control" placeholder="https://my-probe.workers.dev">
+        </div>
+        <div class="col-md-6">
+            <label class="form-label fw-semibold">Shared Secret Token</label>
+            <input type="password" name="edge_worker_token" value="<?= htmlspecialchars(setting('edge_worker_token', '')) ?>" class="form-control" placeholder="Secret Token configured in Worker">
+        </div>
+    </div>
+</div>
+
 </div>
             </div>
         </div>
