@@ -24,6 +24,20 @@ class MonitorController
         View::render('admin/monitors/index', ['monitors' => $monitors]);
     }
 
+    public function saveOrder(): void
+    {
+        $orders = $_POST['order'] ?? [];
+        if (is_array($orders)) {
+            $stmt = $this->db->prepare("UPDATE monitors SET sort_order = ? WHERE id = ?");
+            foreach ($orders as $id => $pos) {
+                $stmt->execute([(int)$pos, (int)$id]);
+            }
+        }
+
+        header('Location: /admin/monitors?reordered=1');
+        exit;
+    }
+
     public function store(): void
     {
         $name     = trim($_POST['name'] ?? '');
