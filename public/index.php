@@ -103,6 +103,12 @@ $router->get('/admin/logs', [\App\Controllers\Admin\LogController::class, 'index
 $router->get('/admin/updater', [\App\Controllers\Admin\UpdaterController::class, 'index']);
 $router->post('/admin/updater/apply', [\App\Controllers\Admin\UpdaterController::class, 'apply']);
 
+// Language Switcher Route
+$router->get('/lang/switch', [\App\Controllers\LanguageController::class, 'switch']);
+
+// LibreTranslate Auto-Translator Route
+$router->post('/admin/translations/sync', [\App\Controllers\Admin\TranslationController::class, 'sync']);
+
 // Admin Profile & Security
 $router->get('/admin/profile', [\App\Controllers\Admin\ProfileController::class, 'index']);
 $router->post('/admin/profile/update-info', [\App\Controllers\Admin\ProfileController::class, 'updateInfo']);
