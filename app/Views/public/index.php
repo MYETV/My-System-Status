@@ -1,6 +1,35 @@
 <!-- path: app/Views/public/index.php -->
 <div class="container my-5" style="max-width: 900px;">
-    <!-- 1. GLOBAL CORE STATUS BANNER (Reflects ONLY Primary Core Systems) -->
+    <!-- Feedback Alerts -->
+    <?php if (isset($_GET['sub_success'])): ?>
+        <div class="alert alert-success alert-dismissible fade show shadow-sm mb-4" role="alert">
+            <i class="bi bi-check-circle-fill me-2"></i> <?= htmlspecialchars($_GET['sub_success']) ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    <?php endif; ?>
+
+    <?php if (isset($_GET['sub_error'])): ?>
+        <div class="alert alert-danger alert-dismissible fade show shadow-sm mb-4" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i> <?= htmlspecialchars($_GET['sub_error']) ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    <?php endif; ?>
+
+    <?php if (isset($_GET['unsub_sent'])): ?>
+        <div class="alert alert-info alert-dismissible fade show shadow-sm mb-4" role="alert">
+            <i class="bi bi-envelope-check-fill me-2"></i> We have sent a time-limited confirmation link to your email. Click it within 60 minutes to unsubscribe.
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    <?php endif; ?>
+
+    <?php if (isset($_GET['unsub_success'])): ?>
+        <div class="alert alert-success alert-dismissible fade show shadow-sm mb-4" role="alert">
+            <i class="bi bi-check-circle-fill me-2"></i> You have been successfully unsubscribed from all alert notifications.
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    <?php endif; ?>
+
+    <!-- 1. GLOBAL CORE STATUS BANNER -->
     <?php 
         $badgeClass = match ($primaryStatus) {
             'operational'  => 'bg-success',
@@ -17,9 +46,11 @@
     ?>
     <div class="p-4 rounded-3 text-white <?= $badgeClass ?> shadow-sm mb-4 d-flex justify-content-between align-items-center">
         <h4 class="mb-0 fw-bold"><i class="bi bi-shield-fill-check me-2"></i> <?= $statusText ?></h4>
-        <button class="btn btn-light btn-sm fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#subscribeModal">
-            <i class="bi bi-bell me-1"></i> Subscribe to Updates
-        </button>
+        <div class="d-flex gap-2">
+            <button class="btn btn-light btn-sm fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#subscribeGlobalModal">
+                <i class="bi bi-bell me-1"></i> Subscribe to All
+            </button>
+        </div>
     </div>
 
     <!-- Active Maintenances -->
@@ -95,7 +126,17 @@
             <div class="d-flex justify-content-between align-items-center mb-2">
                 <div class="d-flex align-items-center gap-2">
                     <span class="fw-bold fs-6 text-dark"><?= htmlspecialchars($monitor['name']) ?></span>
+
+                    <!-- Single Probe Subscribe Bell -->
+                    <button class="btn btn-sm btn-outline-secondary py-0 px-2 rounded-pill shadow-none" 
+                            style="font-size: 11px;" 
+                            type="button" 
+                            title="Subscribe to alerts for this service only"
+                            onclick="openSingleSubscribeModal(<?= $monitor['id'] ?>, '<?= htmlspecialchars(addslashes($monitor['name'])) ?>')">
+                        <i class="bi bi-bell"></i>
+                    </button>
                     
+                    <!-- Sub-services Accordion Toggle Badge -->
                     <?php if ($hasChildren): ?>
                         <button class="btn btn-sm btn-outline-secondary py-0 px-2 rounded-pill shadow-none" 
                                 style="font-size: 11px;" 
@@ -186,10 +227,19 @@
                             ?>
                             <div class="bg-light p-3 rounded-3 border">
                                 <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <span class="fw-semibold text-dark small">
-                                        <i class="bi bi-arrow-return-right me-1 text-muted"></i>
-                                        <?= htmlspecialchars($child['name']) ?>
-                                    </span>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="fw-semibold text-dark small">
+                                            <i class="bi bi-arrow-return-right me-1 text-muted"></i>
+                                            <?= htmlspecialchars($child['name']) ?>
+                                        </span>
+                                        <button class="btn btn-sm btn-outline-secondary py-0 px-2 rounded-pill shadow-none" 
+                                                style="font-size: 10px;" 
+                                                type="button" 
+                                                title="Subscribe to this sub-service"
+                                                onclick="openSingleSubscribeModal(<?= $child['id'] ?>, '<?= htmlspecialchars(addslashes($child['name'])) ?>')">
+                                            <i class="bi bi-bell"></i>
+                                        </button>
+                                    </div>
                                     <span class="badge bg-<?= $child['current_status'] === 'operational' ? 'success' : ($child['current_status'] === 'degraded' ? 'warning text-dark' : 'danger') ?> py-1 px-2" style="font-size: 10px;">
                                         <?= strtoupper($child['current_status']) ?>
                                     </span>
@@ -251,7 +301,7 @@
         </div>
     <?php endif; ?>
 
-    <!-- 3. SECONDARY & THIRD-PARTY CLOUD DEPENDENCIES SECTION WITH OWN STATUS BANNER -->
+    <!-- 3. SECONDARY & THIRD-PARTY CLOUD DEPENDENCIES SECTION -->
     <?php if (!empty($secondaryMonitors)): ?>
         <?php
             $secBannerColor = match ($secondaryStatus) {
@@ -273,7 +323,6 @@
                 default        => 'External dependencies status'
             };
         ?>
-        <!-- Dedicated Secondary Systems Banner -->
         <div class="alert <?= $secBannerColor ?> shadow-sm mb-3 d-flex align-items-center gap-2 py-3 px-4 rounded-3">
             <i class="bi <?= $secBannerIcon ?> fs-4"></i>
             <div>
@@ -296,26 +345,25 @@
         </div>
     <?php endif; ?>
 
-    <!-- Fallback if no monitors exist -->
-    <?php if (empty($primaryMonitors) && empty($secondaryMonitors)): ?>
-        <div class="card shadow-sm border-0 p-5 text-center text-muted mb-4">
-            <i class="bi bi-hdd-network fs-1 mb-2 text-secondary"></i>
-            <h5>No Services Configured</h5>
-            <p class="small mb-0">Monitored routes will appear here once added in the admin dashboard.</p>
-        </div>
-    <?php endif; ?>
+    <!-- Footer Unsubscribe Helper Link -->
+    <div class="text-center mt-4">
+        <a href="#" class="text-decoration-none text-muted small" data-bs-toggle="modal" data-bs-target="#unsubscribeModal">
+            <i class="bi bi-envelope-x me-1"></i> Need to unsubscribe from all alerts? Click here.
+        </a>
+    </div>
 </div>
 
-<!-- Subscribe Modal -->
-<div class="modal fade" id="subscribeModal" tabindex="-1">
+<!-- Modal 1: Subscribe to ALL Services -->
+<div class="modal fade" id="subscribeGlobalModal" tabindex="-1">
     <div class="modal-dialog">
         <form action="/subscribe" method="POST" class="modal-content">
+            <input type="hidden" name="monitor_id" value="">
             <div class="modal-header">
-                <h5 class="modal-title"><i class="bi bi-bell me-2 text-primary"></i> Subscribe to Incident Alerts</h5>
+                <h5 class="modal-title fw-bold"><i class="bi bi-bell text-primary me-2"></i>Subscribe to All Alerts</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <p class="text-muted">Get notifications directly to your inbox whenever an incident or scheduled maintenance occurs.</p>
+                <p class="text-muted small">You will receive email notifications whenever any incident, outage, or scheduled maintenance occurs across all platform services.</p>
                 <div class="mb-3">
                     <label class="form-label fw-semibold">Email address</label>
                     <input type="email" name="email" class="form-control" placeholder="you@example.com" required>
@@ -323,8 +371,65 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="submit" class="btn btn-primary fw-semibold">Subscribe</button>
+                <button type="submit" class="btn btn-primary fw-semibold">Subscribe to All</button>
             </div>
         </form>
     </div>
 </div>
+
+<!-- Modal 2: Subscribe to a SINGLE Probe -->
+<div class="modal fade" id="subscribeSingleModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form action="/subscribe" method="POST" class="modal-content">
+            <input type="hidden" name="monitor_id" id="singleModalMonitorId" value="">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold"><i class="bi bi-bell text-primary me-2"></i>Subscribe to Service Alerts</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small">You are subscribing specifically to alerts concerning:</p>
+                <div class="alert alert-light border fw-bold text-dark mb-3" id="singleModalMonitorName">Service Name</div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Email address</label>
+                    <input type="email" name="email" class="form-control" placeholder="you@example.com" required>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-primary fw-semibold">Subscribe to this Service</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal 3: Time-Limited Universal Unsubscribe (Magic Link) -->
+<div class="modal fade" id="unsubscribeModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form action="/subscribe/request-unsubscribe" method="POST" class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold text-danger"><i class="bi bi-envelope-x me-2"></i>Unsubscribe from Alerts</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small">Enter your email address. We will send you a secure, time-limited confirmation link (valid for 60 minutes) to unsubscribe from all registered monitors.</p>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Your registered Email</label>
+                    <input type="email" name="email" class="form-control" placeholder="you@example.com" required>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-danger fw-semibold">Send Unsubscribe Link</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function openSingleSubscribeModal(monitorId, monitorName) {
+    document.getElementById('singleModalMonitorId').value = monitorId;
+    document.getElementById('singleModalMonitorName').textContent = monitorName;
+    const modal = new bootstrap.Modal(document.getElementById('subscribeSingleModal'));
+    modal.show();
+}
+</script>
