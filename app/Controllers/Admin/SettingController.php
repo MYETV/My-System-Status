@@ -46,7 +46,7 @@ class SettingController
             'libretranslate_endpoint', 'libretranslate_api_key',
             'turnstile_site_key', 'turnstile_secret_key',
             'rate_limit_max_attempts', 'rate_limit_lockout_minutes',
-            'discord_webhook_url'
+            'discord_webhook_url','cf_tunnel_name', 'cf_tunnel_account_id', 'cf_tunnel_id', 'cf_tunnel_api_token',
         ];
 
         foreach ($textKeys as $key) {
