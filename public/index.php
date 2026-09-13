@@ -47,6 +47,8 @@ $router->get('/', [\App\Controllers\StatusPageController::class, 'index']);
 $router->get('/timezone/set', [\App\Controllers\TimezoneController::class, 'set']);
 $router->post('/timezone/set', [\App\Controllers\TimezoneController::class, 'set']);
 $router->get('/api/v1/alerts', [\App\Controllers\Api\AlertController::class, 'getActiveAlerts']);
+// Edge Worker Outage Recovery Hook
+$router->post('/api/v1/edge/recovery', [\App\Controllers\Api\EdgeRecoveryController::class, 'recordRecovery']);
 // Subscription & Universal Magic Link Unsubscribe
 $router->post('/subscribe', [\App\Controllers\StatusPageController::class, 'subscribe']);
 $router->get('/subscribe/verify', [\App\Controllers\StatusPageController::class, 'verify']);
