@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS `monitors` (
 CREATE TABLE IF NOT EXISTS `monitor_logs` (
     `id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     `monitor_id` INT UNSIGNED NOT NULL,
-    `status` ENUM('up', 'down', 'timeout') NOT NULL,
+    `status` ENUM('up', 'down', 'timeout', 'blackout') NOT NULL,
     `response_time_ms` INT UNSIGNED NULL,
     `http_code` INT NULL,
     `error_message` TEXT NULL,
