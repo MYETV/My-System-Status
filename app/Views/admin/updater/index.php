@@ -1,4 +1,8 @@
 <!-- path: app/Views/admin/updater/index.php -->
+<?php
+$permCheck = $permCheck ?? ['is_ready' => true, 'failed_paths' => []];
+$canUpdate = $permCheck['is_ready'] ?? true;
+?>
 <div class="container-fluid py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
@@ -73,11 +77,33 @@
                             <?= nl2br(htmlspecialchars($updateInfo['release_notes'])) ?>
                         </div>
 
+                        <!-- Pre-flight Write Permissions Warning -->
+                        <?php if (!$canUpdate): ?>
+                            <div class="alert alert-danger border-danger shadow-sm mb-3">
+                                <h6 class="fw-bold mb-1"><i class="bi bi-shield-x me-1"></i> Write Permissions Warning</h6>
+                                <p class="small mb-2">
+                                    The web server cannot overwrite the following files or directories because they belong to another user:
+                                    <strong><?= htmlspecialchars(implode(', ', $permCheck['failed_paths'])) ?></strong>
+                                </p>
+                                <p class="small mb-1 text-muted">Run this terminal command to grant write access to <code>www-data</code>, then refresh this page:</p>
+                                <div class="p-2 bg-dark text-white rounded small font-monospace user-select-all">
+                                    sudo chown -R www-data:www-data /var/www/mysystemstatus.myetv.tv
+                                </div>
+                            </div>
+                        <?php endif; ?>
+
                         <form action="/admin/updater/apply" method="POST" onsubmit="return confirm('Start the update process now? Files will be updated automatically.');">
                             <input type="hidden" name="zip_url" value="<?= htmlspecialchars($updateInfo['zip_url']) ?>">
-                            <button type="submit" class="btn btn-success fw-bold px-4">
-                                <i class="bi bi-cloud-arrow-down-fill me-1"></i> Download & Install v<?= htmlspecialchars($updateInfo['version']) ?>
-                            </button>
+                            
+                            <?php if ($canUpdate): ?>
+                                <button type="submit" class="btn btn-success fw-bold px-4">
+                                    <i class="bi bi-cloud-arrow-down-fill me-1"></i> Download & Install v<?= htmlspecialchars($updateInfo['version']) ?>
+                                </button>
+                            <?php else: ?>
+                                <button type="button" class="btn btn-secondary fw-bold px-4" disabled>
+                                    <i class="bi bi-lock-fill me-1"></i> Resolve Permissions to Enable Update
+                                </button>
+                            <?php endif; ?>
                         </form>
                     <?php else: ?>
                         <div class="text-center py-4">
