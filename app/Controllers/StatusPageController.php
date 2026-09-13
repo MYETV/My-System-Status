@@ -23,10 +23,10 @@ class StatusPageController
     {
         // 1. Fetch only root monitors (no parent_id)
         $stmt = $this->db->query("
-            SELECT * FROM monitors 
-            WHERE is_active = 1 AND parent_id IS NULL 
-            ORDER BY name ASC
-        ");
+    SELECT * FROM monitors 
+    WHERE is_active = 1 AND parent_id IS NULL 
+    ORDER BY sort_order ASC, name ASC
+");
         $monitors = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         // 2. Attach child sub-services to each parent monitor (e.g. Cloudflare Workers, DNS, CDN)
