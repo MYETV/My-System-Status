@@ -87,4 +87,14 @@ $title   = $pageTitle ?? $appName;
         justify-content: center;
         padding: 15px 0 !important;
     }
+
+    #page-content-wrapper {
+    min-width: 0;
+    width: 100%;
+    overflow-x: hidden;
+}
+.table-responsive {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+}
 </style>
