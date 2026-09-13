@@ -16,10 +16,14 @@ class MonitorService
     }
 
     /**
-     * Run checks for all monitors due for execution.
+     * Run checks for all monitors due for execution with blackout detection.
      */
     public function runPendingChecks(): void
     {
+        // 1. Retroactive Blackout / Gap Detection (When server wakes up after being turned off)
+        $this->detectAndBackfillBlackouts();
+
+        // 2. Fetch monitors due for execution
         $stmt = $this->db->prepare("
             SELECT * FROM monitors 
             WHERE is_active = 1 
@@ -48,12 +52,51 @@ class MonitorService
     }
 
     /**
+     * Detect if system was offline/powered down and backfill blackout logs
+     */
+    private function detectAndBackfillBlackouts(): void
+    {
+        $stmt = $this->db->query("
+            SELECT id, name, interval_seconds, last_check 
+            FROM monitors 
+            WHERE is_active = 1 AND last_check IS NOT NULL
+        ");
+        $monitors = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $now = time();
+        foreach ($monitors as $m) {
+            $lastCheckTime = strtotime($m['last_check']);
+            $interval      = max(60, (int)$m['interval_seconds']);
+            $elapsed       = $now - $lastCheckTime;
+
+            // If elapsed time is more than 2.5x the expected interval and at least 300 seconds (5 min)
+            if ($elapsed >= ($interval * 2.5) && $elapsed >= 300) {
+                $blackoutMinutes = round($elapsed / 60);
+                $blackoutTime    = date('Y-m-d H:i:s', $lastCheckTime + $interval);
+
+                // Insert retroactive blackout event log
+                $logStmt = $this->db->prepare("
+                    INSERT INTO monitor_logs (monitor_id, status, response_time_ms, http_code, error_message, created_at)
+                    VALUES (?, 'blackout', 0, 0, ?, ?)
+                ");
+                $logStmt->execute([
+                    $m['id'],
+                    "System Blackout: Server was offline for {$blackoutMinutes} min. Expected check window missed.",
+                    $blackoutTime
+                ]);
+            }
+        }
+    }
+
+    /**
      * Run concurrent HTTP checks using curl_multi.
      */
     private function checkHttpConcurrent(array $monitors): void
     {
         $mh = curl_multi_init();
         $curlHandles = [];
+        $appName = htmlspecialchars(setting('app_name', 'My System Status'));
+        $appUrl  = app_url();
 
         foreach ($monitors as $monitor) {
             $ch = curl_init();
@@ -65,7 +108,7 @@ class MonitorService
                 CURLOPT_FOLLOWLOCATION => true,
                 CURLOPT_MAXREDIRS      => 3,
                 CURLOPT_SSL_VERIFYPEER => true,
-                CURLOPT_USERAGENT      => 'MySystemStatus/1.0 (+https://mysystemstatus.myetv.tv)'
+                CURLOPT_USERAGENT      => "{$appName}/1.0 (+{$appUrl})"
             ]);
             curl_multi_add_handle($mh, $ch);
             $curlHandles[(int)$ch] = ['handle' => $ch, 'monitor' => $monitor, 'start' => microtime(true)];
