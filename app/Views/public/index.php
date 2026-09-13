@@ -1,6 +1,8 @@
 <!-- path: app/Views/public/index.php -->
 <?php
-$uptimeHistory = $uptimeHistory ?? [];
+$uptimeHistory   = $uptimeHistory ?? [];
+$allIncidents    = $allIncidents ?? [];
+$allMaintenances = $allMaintenances ?? [];
 ?>
 <div class="container my-5" style="max-width: 900px;">
     <!-- Feedback Alerts -->
@@ -32,7 +34,7 @@ $uptimeHistory = $uptimeHistory ?? [];
         </div>
     <?php endif; ?>
 
-    <!-- 1. GLOBAL CORE STATUS BANNER (Reflects ONLY Primary Core Systems) -->
+    <!-- 1. GLOBAL CORE STATUS BANNER -->
     <?php 
         $badgeClass = match ($primaryStatus) {
             'operational'  => 'bg-success',
@@ -117,9 +119,9 @@ $uptimeHistory = $uptimeHistory ?? [];
         <?php endforeach; ?>
     <?php endif; ?>
 
-    <!-- Reusable Monitor Row Function with Blackout Support -->
+    <!-- Reusable Monitor Row Function with Day Click Details -->
     <?php
-    $renderMonitorRow = function(array $monitor) use ($uptimeHistory) {
+    $renderMonitorRow = function(array $monitor) use ($uptimeHistory, $allIncidents, $allMaintenances) {
         $hasChildren = !empty($monitor['children']);
         $uptimePct   = (float)($monitor['uptime_percentage'] ?? 100.00);
         $isDown      = ($monitor['current_status'] === 'down');
@@ -132,7 +134,7 @@ $uptimeHistory = $uptimeHistory ?? [];
                 <div class="d-flex align-items-center gap-2 flex-wrap">
                     <span class="fw-bold fs-6 text-dark"><?= htmlspecialchars($monitor['name']) ?></span>
 
-                    <!-- Single Probe Subscribe / Unsubscribe Button -->
+                    <!-- Single Probe Subscribe Button -->
                     <button class="btn btn-sm btn-outline-secondary py-0 px-2 rounded-pill shadow-none d-flex align-items-center gap-1" 
                             style="font-size: 11px;" 
                             type="button" 
@@ -170,7 +172,7 @@ $uptimeHistory = $uptimeHistory ?? [];
                 </div>
             </div>
 
-            <!-- 90-Day Interactive Uptime Graph (Data-Driven with Blackout Support) -->
+            <!-- 90-Day Interactive Uptime Graph with Click-to-Inspect Modal -->
             <div class="uptime-graph" role="group" aria-label="90 Days Uptime History">
                 <?php
                     for ($day = 89; $day >= 0; $day--):
@@ -180,44 +182,83 @@ $uptimeHistory = $uptimeHistory ?? [];
 
                         $dayData = $uptimeHistory[$mId][$dayDate] ?? null;
 
-                        if ($day === 0) {
-                            // Today: reflects real-time monitor status
-                            if ($isDown) {
-                                $barClass = 'uptime-outage';
-                                $label = "<strong>{$formattedDate}</strong><br><span style='color: #ef4444;'>●</span> Major Outage";
-                            } elseif ($isDegraded) {
-                                $barClass = 'uptime-degraded';
-                                $label = "<strong>{$formattedDate}</strong><br><span style='color: #f59e0b;'>●</span> Degraded Performance";
-                            } else {
-                                $barClass = 'uptime-operational';
-                                $label = "<strong>{$formattedDate}</strong><br><span style='color: #10b981;'>●</span> 100% Operational";
-                            }
-                        } else {
-                            // Past Days: derived from real database logs
-                            if ($dayData && $dayData['blackout'] > 0) {
-                                // Black bar: Machine was offline / blackout gap
-                                $barClass = 'uptime-blackout';
-                                $label = "<strong>{$formattedDate}</strong><br><span style='color: #0f172a;'>⬛</span> System Blackout (Machine Offline)";
-                            } elseif ($dayData && $dayData['down'] > 0) {
-                                $barClass = 'uptime-outage';
-                                $label = "<strong>{$formattedDate}</strong><br><span style='color: #ef4444;'>●</span> Service Outage Logged";
-                            } elseif ($dayData && $dayData['up'] < $dayData['total']) {
-                                $barClass = 'uptime-degraded';
-                                $label = "<strong>{$formattedDate}</strong><br><span style='color: #f59e0b;'>●</span> Performance Issues Detected";
-                            } elseif ($dayData && $dayData['total'] > 0) {
-                                $barClass = 'uptime-operational';
-                                $label = "<strong>{$formattedDate}</strong><br><span style='color: #10b981;'>●</span> 100% Operational";
-                            } else {
-                                $barClass = 'uptime-operational';
-                                $label = "<strong>{$formattedDate}</strong><br><span style='color: #10b981;'>●</span> Operational";
+                        // Check if an Incident occurred on this day for this monitor (or global)
+                        $hasIncident = false;
+                        $incidentTitle = '';
+                        foreach ($allIncidents as $inc) {
+                            if (empty($inc['monitor_id']) || (int)$inc['monitor_id'] === $mId) {
+                                $incStart = date('Y-m-d', strtotime($inc['created_at']));
+                                $incEnd   = date('Y-m-d', strtotime($inc['updated_at']));
+                                if ($dayDate >= $incStart && $dayDate <= $incEnd) {
+                                    $hasIncident = true;
+                                    $incidentTitle = $inc['title'];
+                                    break;
+                                }
                             }
                         }
+
+                        // Check if a Maintenance occurred on this day for this monitor (or global)
+                        $hasMaintenance = false;
+                        $maintTitle = '';
+                        foreach ($allMaintenances as $maint) {
+                            if (empty($maint['monitor_id']) || (int)$maint['monitor_id'] === $mId) {
+                                $mStart = date('Y-m-d', strtotime($maint['start_time']));
+                                $mEnd   = date('Y-m-d', strtotime($maint['end_time']));
+                                if ($dayDate >= $mStart && $dayDate <= $mEnd) {
+                                    $hasMaintenance = true;
+                                    $maintTitle = $maint['title'];
+                                    break;
+                                }
+                            }
+                        }
+
+                        // PRIORITY HIERARCHY FOR COLORS: Blackout > Outage > Incident > Maintenance > Degraded > Operational
+                        if ($day === 0 && $isDown) {
+                            $barClass = 'uptime-outage';
+                            $label = "<strong>{$formattedDate}</strong><br><span style='color: #ef4444;'>●</span> Major Outage";
+                        } elseif ($dayData && $dayData['blackout'] > 0) {
+                            $barClass = 'uptime-blackout';
+                            $label = "<strong>{$formattedDate}</strong><br><span style='color: #0f172a;'>⬛</span> System Blackout (Machine Offline)";
+                        } elseif ($dayData && $dayData['down'] > 0) {
+                            $barClass = 'uptime-outage';
+                            $label = "<strong>{$formattedDate}</strong><br><span style='color: #ef4444;'>●</span> Outage Detected";
+                        } elseif ($hasIncident) {
+                            // ORANGE BAR: Declared Incident
+                            $barClass = 'uptime-incident';
+                            $label = "<strong>{$formattedDate}</strong><br><span style='color: #f97316;'>●</span> Incident: " . htmlspecialchars($incidentTitle);
+                        } elseif ($hasMaintenance) {
+                            // AZURE BLUE BAR: Scheduled Maintenance
+                            $barClass = 'uptime-maintenance';
+                            $label = "<strong>{$formattedDate}</strong><br><span style='color: #0ea5e9;'>●</span> Maintenance: " . htmlspecialchars($maintTitle);
+                        } elseif ($dayData && $dayData['up'] < $dayData['total']) {
+                            $barClass = 'uptime-degraded';
+                            $label = "<strong>{$formattedDate}</strong><br><span style='color: #f59e0b;'>●</span> Performance Degraded";
+                        } elseif ($dayData && $dayData['total'] > 0) {
+                            $barClass = 'uptime-operational';
+                            $label = "<strong>{$formattedDate}</strong><br><span style='color: #10b981;'>●</span> 100% Operational";
+                        } else {
+                            $barClass = 'uptime-operational';
+                            $label = "<strong>{$formattedDate}</strong><br><span style='color: #10b981;'>●</span> Operational";
+                        }
+
+                        // Payload for the click-to-inspect daily modal
+                        $modalPayload = [
+                            'date'        => $formattedDate,
+                            'monitor'     => $monitor['name'],
+                            'checks'      => $dayData['total'] ?? 0,
+                            'blackouts'   => $dayData['blackout'] ?? 0,
+                            'outages'     => $dayData['down'] ?? 0,
+                            'incident'    => $hasIncident ? $incidentTitle : null,
+                            'maintenance' => $hasMaintenance ? $maintTitle : null
+                        ];
+                        $jsonPayload = htmlspecialchars(json_encode($modalPayload), ENT_QUOTES, 'UTF-8');
                 ?>
                     <div class="uptime-bar <?= $barClass ?>" 
                          data-bs-toggle="tooltip" 
                          data-bs-placement="top" 
                          data-bs-html="true" 
-                         title="<?= htmlspecialchars($label, ENT_QUOTES) ?>">
+                         title="<?= htmlspecialchars($label, ENT_QUOTES) ?>"
+                         onclick="openDayDetailModal(<?= $jsonPayload ?>)">
                     </div>
                 <?php endfor; ?>
             </div>
@@ -228,7 +269,7 @@ $uptimeHistory = $uptimeHistory ?? [];
                 <span>Today</span>
             </div>
 
-            <!-- Sub-services Drawer with Blackout Support -->
+            <!-- Sub-services Drawer -->
             <?php if ($hasChildren): ?>
                 <div class="collapse mt-3 pt-3 border-top" id="subservices-<?= $monitor['id'] ?>">
                     <div class="ps-3 border-start border-3 border-primary-subtle d-flex flex-column gap-3">
@@ -241,18 +282,10 @@ $uptimeHistory = $uptimeHistory ?? [];
                             ?>
                             <div class="bg-light p-3 rounded-3 border">
                                 <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <div class="d-flex align-items-center gap-2">
-                                        <span class="fw-semibold text-dark small">
-                                            <i class="bi bi-arrow-return-right me-1 text-muted"></i>
-                                            <?= htmlspecialchars($child['name']) ?>
-                                        </span>
-                                        <button class="btn btn-sm btn-outline-secondary py-0 px-2 rounded-pill shadow-none" 
-                                                style="font-size: 10px;" 
-                                                type="button" 
-                                                onclick="openSubscriptionModal(<?= $child['id'] ?>, '<?= htmlspecialchars(addslashes($child['name'])) ?>')">
-                                            <i class="bi bi-bell"></i> Subscribe / Unsubscribe
-                                        </button>
-                                    </div>
+                                    <span class="fw-semibold text-dark small">
+                                        <i class="bi bi-arrow-return-right me-1 text-muted"></i>
+                                        <?= htmlspecialchars($child['name']) ?>
+                                    </span>
                                     <span class="badge bg-<?= $child['current_status'] === 'operational' ? 'success' : ($child['current_status'] === 'degraded' ? 'warning text-dark' : 'danger') ?> py-1 px-2" style="font-size: 10px;">
                                         <?= strtoupper($child['current_status']) ?>
                                     </span>
@@ -268,31 +301,18 @@ $uptimeHistory = $uptimeHistory ?? [];
 
                                             $cData = $uptimeHistory[$cId][$cDayDate] ?? null;
 
-                                            if ($cDay === 0) {
-                                                if ($childDown) {
-                                                    $cClass = 'uptime-outage';
-                                                    $cLabel = "<strong>{$cDate}</strong><br><span style='color: #ef4444;'>●</span> Outage";
-                                                } elseif ($childDegraded) {
-                                                    $cClass = 'uptime-degraded';
-                                                    $cLabel = "<strong>{$cDate}</strong><br><span style='color: #f59e0b;'>●</span> Degraded Performance";
-                                                } else {
-                                                    $cClass = 'uptime-operational';
-                                                    $cLabel = "<strong>{$cDate}</strong><br><span style='color: #10b981;'>●</span> Operational";
-                                                }
+                                            if ($cDay === 0 && $childDown) {
+                                                $cClass = 'uptime-outage';
+                                                $cLabel = "<strong>{$cDate}</strong><br><span style='color: #ef4444;'>●</span> Outage";
+                                            } elseif ($cData && $cData['blackout'] > 0) {
+                                                $cClass = 'uptime-blackout';
+                                                $cLabel = "<strong>{$cDate}</strong><br><span style='color: #0f172a;'>⬛</span> Blackout";
+                                            } elseif ($cData && $cData['down'] > 0) {
+                                                $cClass = 'uptime-outage';
+                                                $cLabel = "<strong>{$cDate}</strong><br><span style='color: #ef4444;'>●</span> Outage";
                                             } else {
-                                                if ($cData && $cData['blackout'] > 0) {
-                                                    $cClass = 'uptime-blackout';
-                                                    $cLabel = "<strong>{$cDate}</strong><br><span style='color: #0f172a;'>⬛</span> Blackout";
-                                                } elseif ($cData && $cData['down'] > 0) {
-                                                    $cClass = 'uptime-outage';
-                                                    $cLabel = "<strong>{$cDate}</strong><br><span style='color: #ef4444;'>●</span> Outage";
-                                                } elseif ($cData && $cData['up'] < $cData['total']) {
-                                                    $cClass = 'uptime-degraded';
-                                                    $cLabel = "<strong>{$cDate}</strong><br><span style='color: #f59e0b;'>●</span> Degraded";
-                                                } else {
-                                                    $cClass = 'uptime-operational';
-                                                    $cLabel = "<strong>{$cDate}</strong><br><span style='color: #10b981;'>●</span> Operational";
-                                                }
+                                                $cClass = 'uptime-operational';
+                                                $cLabel = "<strong>{$cDate}</strong><br><span style='color: #10b981;'>●</span> Operational";
                                             }
                                     ?>
                                         <div class="uptime-bar <?= $cClass ?>" 
@@ -379,7 +399,62 @@ $uptimeHistory = $uptimeHistory ?? [];
     <?php endif; ?>
 </div>
 
-<!-- Unified 2-in-1 Modal: Subscribe / Unsubscribe with Tabs -->
+<!-- Modal 1: Daily History Inspector (Opens when clicking any 90-day bar) -->
+<div class="modal fade" id="dayDetailModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content shadow">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title fw-bold text-dark" id="dayModalDateTitle">Daily Report</h5>
+                    <small class="text-muted" id="dayModalMonitorName">Service Name</small>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <!-- Status List Overview -->
+                <ul class="list-group mb-3">
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Total Automated Checks Executed:
+                        <span class="badge bg-secondary" id="dayModalChecksCount">0</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Outages / Downtime Detected:
+                        <span class="badge bg-danger" id="dayModalOutagesCount">0</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        System Blackouts / Server Offline:
+                        <span class="badge bg-dark" id="dayModalBlackoutsCount">0</span>
+                    </li>
+                </ul>
+
+                <!-- Incidents Breakdown -->
+                <div id="dayModalIncidentBox" class="d-none alert alert-warning border-warning mb-3">
+                    <h6 class="fw-bold mb-1"><i class="bi bi-exclamation-triangle-fill me-1 text-warning"></i> Incident Active:</h6>
+                    <div id="dayModalIncidentTitle" class="small fw-semibold text-dark">Incident description</div>
+                </div>
+
+                <!-- Maintenances Breakdown -->
+                <div id="dayModalMaintBox" class="d-none alert alert-info border-info mb-3">
+                    <h6 class="fw-bold mb-1"><i class="bi bi-tools me-1 text-info"></i> Maintenance Window:</h6>
+                    <div id="dayModalMaintTitle" class="small fw-semibold text-dark">Maintenance description</div>
+                </div>
+
+                <div id="dayModalCleanMsg" class="alert alert-success d-flex align-items-center gap-2 mb-0">
+                    <i class="bi bi-check-circle-fill fs-4 text-success"></i>
+                    <div>
+                        <strong>100% Operational</strong>
+                        <div class="small">No disruptions, outages, or incidents were reported on this day.</div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal 2: Unified 2-in-1 Subscribe / Unsubscribe -->
 <div class="modal fade" id="subscriptionModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content shadow">
@@ -415,7 +490,6 @@ $uptimeHistory = $uptimeHistory ?? [];
                         <div class="mb-3">
                             <label class="form-label fw-semibold">Your Email Address</label>
                             <input type="email" name="email" class="form-control" placeholder="you@example.com" required>
-                            <div class="text-muted small mt-1">We will send a verification link to activate your subscription.</div>
                         </div>
 
                         <button type="submit" class="btn btn-primary w-100 py-2 fw-bold">
@@ -424,12 +498,12 @@ $uptimeHistory = $uptimeHistory ?? [];
                     </form>
                 </div>
 
-                <!-- TAB 2: UNSUBSCRIBE FORM (60-min Magic Link) -->
+                <!-- TAB 2: UNSUBSCRIBE FORM -->
                 <div class="tab-pane fade" id="tabUnsubscribe">
                     <form action="/subscribe/request-unsubscribe" method="POST">
                         <div class="alert alert-light border small text-muted mb-3">
                             <i class="bi bi-shield-lock text-danger me-1"></i>
-                            To protect your privacy, enter your email below. We will send you a secure <strong>one-click confirmation link valid for 60 minutes</strong> to remove all your active subscriptions.
+                            Enter your email below to receive a secure <strong>one-click confirmation link valid for 60 minutes</strong> to remove all your subscriptions.
                         </div>
 
                         <div class="mb-3">
@@ -448,17 +522,53 @@ $uptimeHistory = $uptimeHistory ?? [];
 </div>
 
 <script>
+function openDayDetailModal(data) {
+    document.getElementById('dayModalDateTitle').textContent = 'Daily Report: ' + data.date;
+    document.getElementById('dayModalMonitorName').textContent = data.monitor;
+    document.getElementById('dayModalChecksCount').textContent = data.checks;
+    document.getElementById('dayModalOutagesCount').textContent = data.outages;
+    document.getElementById('dayModalBlackoutsCount').textContent = data.blackouts;
+
+    const incidentBox = document.getElementById('dayModalIncidentBox');
+    const maintBox = document.getElementById('dayModalMaintBox');
+    const cleanMsg = document.getElementById('dayModalCleanMsg');
+
+    let hasEvent = false;
+
+    if (data.incident) {
+        document.getElementById('dayModalIncidentTitle').textContent = data.incident;
+        incidentBox.classList.remove('d-none');
+        hasEvent = true;
+    } else {
+        incidentBox.classList.add('d-none');
+    }
+
+    if (data.maintenance) {
+        document.getElementById('dayModalMaintTitle').textContent = data.maintenance;
+        maintBox.classList.remove('d-none');
+        hasEvent = true;
+    } else {
+        maintBox.classList.add('d-none');
+    }
+
+    if (hasEvent || data.outages > 0 || data.blackouts > 0) {
+        cleanMsg.classList.add('d-none');
+    } else {
+        cleanMsg.classList.remove('d-none');
+    }
+
+    new bootstrap.Modal(document.getElementById('dayDetailModal')).show();
+}
+
 function openSubscriptionModal(monitorId, monitorName) {
     document.getElementById('modalMonitorId').value = monitorId ? monitorId : '';
     document.getElementById('modalTargetServiceName').innerHTML = '<i class="bi bi-hdd-network text-primary"></i> ' + monitorName;
 
-    // Reset to first tab (Subscribe)
     const subscribeTabTrigger = document.querySelector('#subscriptionModal .nav-link[data-bs-target="#tabSubscribe"]');
     if (subscribeTabTrigger) {
         bootstrap.Tab.getOrCreateInstance(subscribeTabTrigger).show();
     }
 
-    const modal = new bootstrap.Modal(document.getElementById('subscriptionModal'));
-    modal.show();
+    new bootstrap.Modal(document.getElementById('subscriptionModal')).show();
 }
 </script>
