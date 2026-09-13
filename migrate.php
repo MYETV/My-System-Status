@@ -105,6 +105,28 @@ try {
     }
     */
 
+    //v1.0.4
+    if (table_exists($pdo, 'monitors')) {
+        // 1. Add parent_id for grouped sub-services (Cloudflare, etc.)
+        if (!column_exists($pdo, 'monitors', 'parent_id')) {
+            $pdo->exec("ALTER TABLE `monitors` ADD COLUMN `parent_id` INT UNSIGNED NULL DEFAULT NULL AFTER `id`;");
+            $pdo->exec("ALTER TABLE `monitors` ADD INDEX `idx_parent_id` (`parent_id`);");
+        }
+
+    //v1.0.3
+    if (table_exists($pdo, 'monitors')) {
+    if (!column_exists($pdo, 'monitors', 'sort_order')) {
+        $pdo->exec("ALTER TABLE `monitors` ADD COLUMN `sort_order` INT NOT NULL DEFAULT 0 AFTER `parent_id`;");
+    }
+}
+
+    //v1.0.2
+    if (table_exists($pdo, 'monitors')) {
+    if (!column_exists($pdo, 'monitors', 'parent_id')) {
+        $pdo->exec("ALTER TABLE `monitors` ADD COLUMN `parent_id` INT UNSIGNED NULL DEFAULT NULL AFTER `id`;");
+    }
+}
+
     if (php_sapi_name() === 'cli') {
         echo "Database migrations are up to date.\n";
     }
