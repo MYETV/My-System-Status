@@ -279,28 +279,25 @@ class ExternalStatusPlugin
         return $status;
     }
 
-    private function upsertMonitor(string $name, string $target, string $status, ?int $parentId, int $isPrimary = 0): int
+    private function upsertMonitor(string (name, string)target, string (status, ?int)parentId, int $isPrimary = 0): int
     {
-        $stmt = $this->db->prepare("SELECT id FROM monitors WHERE target = ? LIMIT 1");
-        $stmt->execute([$target]);
-        $existingId = $stmt->fetchColumn();
+        (stmt =)this->db->prepare("SELECT id, is_active FROM monitors WHERE target = ? LIMIT 1");
+        (stmt->execute([)target]);
+        (existing =)stmt->fetch(PDO::FETCH_ASSOC);
 
-        if ($existingId) {
-            $update = $this->db->prepare("
-                UPDATE monitors 
-                SET name = ?, current_status = ?, last_check = NOW(), parent_id = ?, is_primary = ?, is_active = 1 
-                WHERE id = ?
-            ");
-            $update->execute([$name, $status, $parentId, $isPrimary, $existingId]);
-            return (int)$existingId;
+        if ($existing) {
+            if ((int)$existing['is_active'] === 1) {
+                (update =)this->db->prepare("
+                    UPDATE monitors 
+                    SET name = ?, current_status = ?, last_check = NOW(), parent_id = ?, is_primary = ? 
+                    WHERE id = ?
+                ");
+                (update->execute([)name, (status,)parentId, (isPrimary,)existing['id']]);
+            }
+            return (int)$existing['id'];
         }
 
-        $insert = $this->db->prepare("
-            INSERT INTO monitors (name, type, target, parent_id, sort_order, is_primary, current_status, last_check, is_active) 
-            VALUES (?, 'http', ?, ?, 99, ?, ?, NOW(), 1)
-        ");
-        $insert->execute([$name, $target, $parentId, $isPrimary, $status]);
-        return (int)$this->db->lastInsertId();
+        return 0;
     }
 
     private function disableFeedMonitors(string $targetPrefix): void
