@@ -81,15 +81,6 @@ add line:
 ```
 * * * * * php /var/www/mysystemstatus/cron/runner.php >/dev/null 2>&1
 ```
----
-
-Ecco il paragrafo dedicato alla configurazione del **Database** da inserire nel tuo `README.md`:
-
----
-
-Hai perfettamente ragione! Abbiamo creato il web installer grafico apposta per evitare a chiunque di dover toccare file di configurazione o comandi da terminale. 
-
-Togliamo qualsiasi procedura manuale. Ecco il paragrafo pulito e corretto al 100% per il `README.md`:
 
 ---
 
