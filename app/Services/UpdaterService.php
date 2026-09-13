@@ -26,6 +26,43 @@ class UpdaterService
     }
 
     /**
+     * Pre-flight check: verify write permissions on all critical paths before updating.
+     */
+    public function checkWritePermissions(): array
+    {
+        $rootDir = dirname(__DIR__, 2);
+
+        $criticalPaths = [
+            'Root Directory' => $rootDir,
+            'migrate.php'    => $rootDir . '/migrate.php',
+            'app/'           => $rootDir . '/app',
+            'core/'          => $rootDir . '/core',
+            'public/'        => $rootDir . '/public',
+            'database/'      => $rootDir . '/database',
+            'languages/'     => $rootDir . '/languages'
+        ];
+
+        $failed = [];
+        foreach ($criticalPaths as $label => $path) {
+            if (file_exists($path)) {
+                if (!is_writable($path)) {
+                    $failed[] = "{$label} (" . basename($path) . ")";
+                }
+            } else {
+                // If file/folder doesn't exist yet, check if parent directory is writable
+                if (!is_writable(dirname($path))) {
+                    $failed[] = "{$label} (parent directory not writable)";
+                }
+            }
+        }
+
+        return [
+            'is_ready'     => empty($failed),
+            'failed_paths' => $failed
+        ];
+    }
+
+    /**
      * Check GitHub Releases for new version tags.
      */
     public function checkForUpdates(): ?array
@@ -71,14 +108,22 @@ class UpdaterService
     }
 
     /**
-     * Download archive, extract, and execute database migrations.
+     * Download archive, extract, verify permissions, and execute database migrations.
      */
     public function applyUpdate(string $zipUrl): bool
     {
         $rootDir  = dirname(__DIR__, 2);
-        $tempZip  = sys_get_temp_dir() . '/mysystemstatus_update.zip';
 
-        // 1. Download Release ZIP
+        // 1. Pre-flight write permissions verification
+        $permCheck = $this->checkWritePermissions();
+        if (!$permCheck['is_ready']) {
+            $pathsList = implode(', ', $permCheck['failed_paths']);
+            throw new Exception("Update aborted due to file permissions! Webserver user (www-data) cannot overwrite: [{$pathsList}]. Please run: sudo chown -R www-data:www-data {$rootDir}");
+        }
+
+        $tempZip = sys_get_temp_dir() . '/mysystemstatus_update.zip';
+
+        // 2. Download Release ZIP
         $fp = fopen($tempZip, 'wb');
         $ch = curl_init($zipUrl);
         curl_setopt_array($ch, [
@@ -95,7 +140,7 @@ class UpdaterService
             throw new Exception("Failed to download update package from GitHub.");
         }
 
-        // 2. Extract Archive
+        // 3. Extract Archive
         $zip = new ZipArchive();
         if ($zip->open($tempZip) !== true) {
             @unlink($tempZip);
@@ -119,11 +164,11 @@ class UpdaterService
 
         $sourceDir = $innerFolder ?: $tempExtractDir;
 
-        // 3. Copy files over root (protect custom configs and lock files)
+        // 4. Copy files over root (protect custom configs and lock files)
         $this->copyRecursive($sourceDir, $rootDir);
         $this->deleteDirectory($tempExtractDir);
 
-        // 4. Run database migrations via migrate.php
+        // 5. Run database migrations via migrate.php with forced OPcache flush
         $this->runMigrations();
 
         return true;
@@ -153,7 +198,9 @@ class UpdaterService
             if (is_dir($srcPath)) {
                 $this->copyRecursive($srcPath, $dstPath);
             } else {
-                copy($srcPath, $dstPath);
+                if (!@copy($srcPath, $dstPath)) {
+                    throw new Exception("Permission denied: Unable to overwrite {$dstPath}. Make sure it is owned by www-data.");
+                }
             }
         }
         closedir($dir);
@@ -167,7 +214,7 @@ class UpdaterService
         $migrateScript = dirname(__DIR__, 2) . '/migrate.php';
         
         if (file_exists($migrateScript)) {
-            // 1. Force OPcache to flush so PHP does not execute stale in-memory bytecode
+            // Force OPcache flush
             if (function_exists('opcache_invalidate')) {
                 @opcache_invalidate($migrateScript, true);
             }
@@ -175,7 +222,6 @@ class UpdaterService
                 @opcache_reset();
             }
 
-            // 2. Execute the fresh migration script from disk
             try {
                 require $migrateScript;
             } catch (\Throwable $e) {
