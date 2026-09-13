@@ -235,6 +235,16 @@
                     <label class="form-label fw-semibold">Description</label>
                     <textarea name="description" id="editMaintDesc" class="form-control" rows="3"></textarea>
                 </div>
+<div class="mb-3">
+    <label class="form-label fw-semibold">Target Service (Optional)</label>
+    <select name="monitor_id" class="form-select">
+        <option value="">All Services (Global Maintenance)</option>
+        <?php foreach ($monitorsList as $m): ?>
+            <option value="<?= $m['id'] ?>"><?= htmlspecialchars($m['name']) ?></option>
+        <?php endforeach; ?>
+    </select>
+    <small class="text-muted">Associates this maintenance window to the selected service bar.</small>
+</div>
                 <div class="row g-2 mb-3">
                     <div class="col-md-6">
                         <label class="form-label fw-semibold">Start Window</label>
