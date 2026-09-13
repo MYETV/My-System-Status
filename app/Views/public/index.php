@@ -1,4 +1,7 @@
 <!-- path: app/Views/public/index.php -->
+<?php
+$uptimeHistory = $uptimeHistory ?? [];
+?>
 <div class="container my-5" style="max-width: 900px;">
     <!-- Feedback Alerts -->
     <?php if (isset($_GET['sub_success'])): ?>
@@ -29,7 +32,7 @@
         </div>
     <?php endif; ?>
 
-    <!-- 1. GLOBAL CORE STATUS BANNER -->
+    <!-- 1. GLOBAL CORE STATUS BANNER (Reflects ONLY Primary Core Systems) -->
     <?php 
         $badgeClass = match ($primaryStatus) {
             'operational'  => 'bg-success',
@@ -114,13 +117,14 @@
         <?php endforeach; ?>
     <?php endif; ?>
 
-    <!-- Reusable Monitor Row Function -->
+    <!-- Reusable Monitor Row Function with Blackout Support -->
     <?php
-    $renderMonitorRow = function(array $monitor) {
+    $renderMonitorRow = function(array $monitor) use ($uptimeHistory) {
         $hasChildren = !empty($monitor['children']);
         $uptimePct   = (float)($monitor['uptime_percentage'] ?? 100.00);
         $isDown      = ($monitor['current_status'] === 'down');
         $isDegraded  = ($monitor['current_status'] === 'degraded');
+        $mId         = (int)$monitor['id'];
         ob_start();
         ?>
         <li class="list-group-item py-4">
@@ -128,7 +132,7 @@
                 <div class="d-flex align-items-center gap-2 flex-wrap">
                     <span class="fw-bold fs-6 text-dark"><?= htmlspecialchars($monitor['name']) ?></span>
 
-                    <!-- Single Probe Subscribe / Unsubscribe Button with Text -->
+                    <!-- Single Probe Subscribe / Unsubscribe Button -->
                     <button class="btn btn-sm btn-outline-secondary py-0 px-2 rounded-pill shadow-none d-flex align-items-center gap-1" 
                             style="font-size: 11px;" 
                             type="button" 
@@ -166,14 +170,18 @@
                 </div>
             </div>
 
-            <!-- 90-Day Interactive Uptime Graph -->
+            <!-- 90-Day Interactive Uptime Graph (Data-Driven with Blackout Support) -->
             <div class="uptime-graph" role="group" aria-label="90 Days Uptime History">
                 <?php
                     for ($day = 89; $day >= 0; $day--):
-                        $dayTimestamp = strtotime("-{$day} days");
-                        $formattedDate = date('M d, Y', $dayTimestamp);
+                        $dayTime       = strtotime("-{$day} days");
+                        $dayDate       = date('Y-m-d', $dayTime);
+                        $formattedDate = date('M d, Y', $dayTime);
+
+                        $dayData = $uptimeHistory[$mId][$dayDate] ?? null;
 
                         if ($day === 0) {
+                            // Today: reflects real-time monitor status
                             if ($isDown) {
                                 $barClass = 'uptime-outage';
                                 $label = "<strong>{$formattedDate}</strong><br><span style='color: #ef4444;'>●</span> Major Outage";
@@ -185,19 +193,23 @@
                                 $label = "<strong>{$formattedDate}</strong><br><span style='color: #10b981;'>●</span> 100% Operational";
                             }
                         } else {
-                            if ($uptimePct >= 99.5) {
+                            // Past Days: derived from real database logs
+                            if ($dayData && $dayData['blackout'] > 0) {
+                                // Black bar: Machine was offline / blackout gap
+                                $barClass = 'uptime-blackout';
+                                $label = "<strong>{$formattedDate}</strong><br><span style='color: #0f172a;'>⬛</span> System Blackout (Machine Offline)";
+                            } elseif ($dayData && $dayData['down'] > 0) {
+                                $barClass = 'uptime-outage';
+                                $label = "<strong>{$formattedDate}</strong><br><span style='color: #ef4444;'>●</span> Service Outage Logged";
+                            } elseif ($dayData && $dayData['up'] < $dayData['total']) {
+                                $barClass = 'uptime-degraded';
+                                $label = "<strong>{$formattedDate}</strong><br><span style='color: #f59e0b;'>●</span> Performance Issues Detected";
+                            } elseif ($dayData && $dayData['total'] > 0) {
                                 $barClass = 'uptime-operational';
                                 $label = "<strong>{$formattedDate}</strong><br><span style='color: #10b981;'>●</span> 100% Operational";
-                            } elseif ($uptimePct >= 95.0) {
-                                $barClass = ($day % 18 === 0) ? 'uptime-degraded' : 'uptime-operational';
-                                $label = ($barClass === 'uptime-degraded') 
-                                    ? "<strong>{$formattedDate}</strong><br><span style='color: #f59e0b;'>●</span> 98.2% Uptime"
-                                    : "<strong>{$formattedDate}</strong><br><span style='color: #10b981;'>●</span> 100% Operational";
                             } else {
-                                $barClass = ($day % 9 === 0) ? 'uptime-outage' : 'uptime-operational';
-                                $label = ($barClass === 'uptime-outage') 
-                                    ? "<strong>{$formattedDate}</strong><br><span style='color: #ef4444;'>●</span> Incident Reported"
-                                    : "<strong>{$formattedDate}</strong><br><span style='color: #10b981;'>●</span> 100% Operational";
+                                $barClass = 'uptime-operational';
+                                $label = "<strong>{$formattedDate}</strong><br><span style='color: #10b981;'>●</span> Operational";
                             }
                         }
                 ?>
@@ -216,7 +228,7 @@
                 <span>Today</span>
             </div>
 
-            <!-- Sub-services Drawer -->
+            <!-- Sub-services Drawer with Blackout Support -->
             <?php if ($hasChildren): ?>
                 <div class="collapse mt-3 pt-3 border-top" id="subservices-<?= $monitor['id'] ?>">
                     <div class="ps-3 border-start border-3 border-primary-subtle d-flex flex-column gap-3">
@@ -225,6 +237,7 @@
                                 $childDown     = ($child['current_status'] === 'down');
                                 $childDegraded = ($child['current_status'] === 'degraded');
                                 $childUptime   = (float)($child['uptime_percentage'] ?? 100.00);
+                                $cId           = (int)$child['id'];
                             ?>
                             <div class="bg-light p-3 rounded-3 border">
                                 <div class="d-flex justify-content-between align-items-center mb-2">
@@ -245,10 +258,16 @@
                                     </span>
                                 </div>
 
+                                <!-- Sub-service 90-Day Mini Bar -->
                                 <div class="uptime-graph" style="height: 18px;" role="group">
                                     <?php
                                         for ($cDay = 89; $cDay >= 0; $cDay--):
-                                            $cDate = date('M d, Y', strtotime("-{$cDay} days"));
+                                            $cDayTime  = strtotime("-{$cDay} days");
+                                            $cDayDate  = date('Y-m-d', $cDayTime);
+                                            $cDate     = date('M d, Y', $cDayTime);
+
+                                            $cData = $uptimeHistory[$cId][$cDayDate] ?? null;
+
                                             if ($cDay === 0) {
                                                 if ($childDown) {
                                                     $cClass = 'uptime-outage';
@@ -261,8 +280,19 @@
                                                     $cLabel = "<strong>{$cDate}</strong><br><span style='color: #10b981;'>●</span> Operational";
                                                 }
                                             } else {
-                                                $cClass = ($childUptime >= 99.0) ? 'uptime-operational' : (($cDay % 12 === 0) ? 'uptime-degraded' : 'uptime-operational');
-                                                $cLabel = "<strong>{$cDate}</strong><br><span style='color: #10b981;'>●</span> Operational";
+                                                if ($cData && $cData['blackout'] > 0) {
+                                                    $cClass = 'uptime-blackout';
+                                                    $cLabel = "<strong>{$cDate}</strong><br><span style='color: #0f172a;'>⬛</span> Blackout";
+                                                } elseif ($cData && $cData['down'] > 0) {
+                                                    $cClass = 'uptime-outage';
+                                                    $cLabel = "<strong>{$cDate}</strong><br><span style='color: #ef4444;'>●</span> Outage";
+                                                } elseif ($cData && $cData['up'] < $cData['total']) {
+                                                    $cClass = 'uptime-degraded';
+                                                    $cLabel = "<strong>{$cDate}</strong><br><span style='color: #f59e0b;'>●</span> Degraded";
+                                                } else {
+                                                    $cClass = 'uptime-operational';
+                                                    $cLabel = "<strong>{$cDate}</strong><br><span style='color: #10b981;'>●</span> Operational";
+                                                }
                                             }
                                     ?>
                                         <div class="uptime-bar <?= $cClass ?>" 
