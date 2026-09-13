@@ -19,7 +19,7 @@ class ExternalStatusPlugin
     {
         $results = [];
 
-        // 1. Cloudflare
+        // 1. Cloudflare Public Services & Optional Zero Trust Tunnel
         if (setting('feed_cloudflare_enabled', '1') === '1') {
             $results['cloudflare'] = $this->syncCloudflare();
         } else {
@@ -65,7 +65,7 @@ class ExternalStatusPlugin
     }
 
     /**
-     * Dynamically parse ALL Cloudflare sub-components from summary.json
+     * Parse all core Cloudflare platforms dynamically and check custom Zero Trust Tunnel
      */
     public function syncCloudflare(): string
     {
@@ -82,46 +82,106 @@ class ExternalStatusPlugin
             default    => 'down'
         };
 
-        // 1. Upsert Main Parent Monitor (Secondary external dependency)
+        // 1. Upsert Parent Monitor
         $parentId = $this->upsertMonitor('Cloudflare Global Network', 'https://www.cloudflarestatus.com', $parentStatus, null);
 
-        // 2. WHITELIST ONLY the 6 Core Cloudflare Services (strictly ignore the 400+ individual colos)
-        $coreServicesWhitelist = [
-            'Cloudflare Workers'   => 'Workers & Pages Platform',
-            'Authoritative DNS'    => 'Authoritative DNS Service',
-            'CDN / Cache'          => 'Edge CDN & Cache Network',
-            'Cloudflare Dashboard' => 'Dashboard & Control Panel',
-            'Cloudflare Access'    => 'Zero Trust & Access Gateway',
-            'Turnstile'            => 'Turnstile Captcha Engine'
+        // 2. Comprehensive keywords mapping matching actual Cloudflare Statuspage labels
+        $coreKeywords = [
+            'worker'    => ['name' => 'Workers & Pages Platform', 'slug' => 'workers'],
+            'authoritative' => ['name' => 'Authoritative DNS Service', 'slug' => 'authoritative-dns'],
+            'recursive' => ['name' => 'Recursive DNS (1.1.1.1)', 'slug' => '1111-dns'],
+            'cdn'       => ['name' => 'Edge CDN & Cache Network', 'slug' => 'cdn-cache'],
+            'cache'     => ['name' => 'Edge CDN & Cache Network', 'slug' => 'cdn-cache'],
+            'dashboard' => ['name' => 'Dashboard & Control Panel API', 'slug' => 'dashboard-api'],
+            'access'    => ['name' => 'Zero Trust, Access & Gateway', 'slug' => 'zero-trust'],
+            'turnstile' => ['name' => 'Turnstile Captcha Engine', 'slug' => 'turnstile'],
+            'stream'    => ['name' => 'Cloudflare Stream Video', 'slug' => 'stream'],
+            'warp'      => ['name' => 'WARP Client & Network', 'slug' => 'warp']
         ];
 
+        $matchedSlugs = [];
         $components = $data['components'] ?? [];
+
         foreach ($components as $comp) {
             $name = $comp['name'] ?? '';
-            foreach ($coreServicesWhitelist as $pattern => $displayName) {
-                if (stripos($name, $pattern) !== false) {
+
+            // Ignore colos/datacenters (which contain ' - ' like 'AMS - Amsterdam' or three-letter airport codes)
+            if (str_contains($name, ' - ') || !empty($comp['group'])) {
+                continue;
+            }
+
+            foreach ($coreKeywords as $keyword => $info) {
+                if (stripos($name, $keyword) !== false && !in_array($info['slug'], $matchedSlugs, true)) {
                     $cStatus = match ($comp['status'] ?? '') {
                         'operational' => 'operational',
                         'degraded_performance', 'partial_outage' => 'degraded',
                         default => 'down'
                     };
 
-                    $targetSlug = 'https://www.cloudflarestatus.com#' . preg_replace('/[^a-z0-9]/i', '', $pattern);
-                    $this->upsertMonitor("Cloudflare - {$displayName}", $targetSlug, $cStatus, $parentId);
+                    $targetUrl = "https://www.cloudflarestatus.com#{$info['slug']}";
+                    $this->upsertMonitor("Cloudflare - {$info['name']}", $targetUrl, $cStatus, $parentId);
+                    $matchedSlugs[] = $info['slug'];
                     break;
                 }
             }
         }
 
+        // 3. OPTIONAL: Check Custom Cloudflare Zero Trust Tunnel via Cloudflare API v4
+        $this->checkCustomCloudflareTunnel($parentId);
+
         return $parentStatus;
     }
 
     /**
-     * Amazon AWS Health Feed
+     * Check individual Cloudflare Zero Trust Tunnel health if credentials are set
      */
+    private function checkCustomCloudflareTunnel(int $parentId): void
+    {
+        $accountId = setting('cf_tunnel_account_id');
+        $tunnelId  = setting('cf_tunnel_id');
+        $apiToken  = setting('cf_tunnel_api_token');
+
+        if (empty($accountId) || empty($tunnelId) || empty($apiToken)) {
+            return;
+        }
+
+        $url = "https://api.cloudflare.com/client/v4/accounts/{$accountId}/cfd_tunnel/{$tunnelId}";
+
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 8,
+            CURLOPT_HTTPHEADER     => [
+                "Authorization: Bearer {$apiToken}",
+                "Content-Type: application/json"
+            ]
+        ]);
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($httpCode === 200 && $response) {
+            $data = json_decode($response, true);
+            if (!empty($data['success']) && !empty($data['result'])) {
+                $tResult = $data['result'];
+                $tunnelStatus = strtolower($tResult['status'] ?? 'down');
+                $customName   = setting('cf_tunnel_name') ?: ($tResult['name'] ?? 'Zero Trust Tunnel');
+
+                $status = match ($tunnelStatus) {
+                    'healthy'  => 'operational',
+                    'degraded' => 'degraded',
+                    default    => 'down'
+                };
+
+                $targetUrl = "https://dash.cloudflare.com/{$accountId}/networks/tunnels/{$tunnelId}";
+                $this->upsertMonitor("Tunnel: {$customName}", $targetUrl, $status, $parentId);
+            }
+        }
+    }
+
     public function syncAws(): string
     {
-        $opts = ['http' => ['timeout' => 8, 'user_agent' => 'MySystemStatus-Probe/1.0']];
+        $opts = ['http' => ['timeout' => 8, 'user_agent' => 'MySystemStatus/1.0']];
         $json = @file_get_contents('https://status.aws.amazon.com/data.json', false, stream_context_create($opts));
 
         $status = 'operational';
@@ -136,12 +196,9 @@ class ExternalStatusPlugin
         return $status;
     }
 
-    /**
-     * Microsoft Azure Status Feed
-     */
     public function syncAzure(): string
     {
-        $opts = ['http' => ['timeout' => 8, 'user_agent' => 'MySystemStatus-Probe/1.0']];
+        $opts = ['http' => ['timeout' => 8, 'user_agent' => 'MySystemStatus/1.0']];
         $html = @file_get_contents('https://azure.status.microsoft/en-us/status', false, stream_context_create($opts));
 
         $status = 'operational';
@@ -155,7 +212,7 @@ class ExternalStatusPlugin
 
     public function syncPayPal(): string
     {
-        $opts = ['http' => ['timeout' => 8, 'user_agent' => 'MySystemStatus-Probe/1.0']];
+        $opts = ['http' => ['timeout' => 8, 'user_agent' => 'MySystemStatus/1.0']];
         $json = @file_get_contents('https://www.paypal-status.com/api/v1/components', false, stream_context_create($opts));
 
         $status = 'operational';
