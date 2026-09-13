@@ -12,10 +12,27 @@
         </form>
     </div>
 
+    <!-- Feeds Synced Alert -->
     <?php if (isset($_GET['synced'])): ?>
-        <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <div class="alert alert-success alert-dismissible fade show shadow-sm" role="alert">
             <i class="bi bi-check-circle-fill me-2"></i> External status feeds synchronized successfully!
             <div class="small mt-1"><strong>Status:</strong> <?= htmlspecialchars($_GET['summary'] ?? '') ?></div>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    <?php endif; ?>
+
+    <!-- Translation Success Alert -->
+    <?php if (isset($_GET['translated'])): ?>
+        <div class="alert alert-success alert-dismissible fade show shadow-sm" role="alert">
+            <i class="bi bi-check-circle-fill me-2"></i> <?= htmlspecialchars($_GET['msg'] ?? 'Translations updated successfully!') ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    <?php endif; ?>
+
+    <!-- Error Alert -->
+    <?php if (isset($_GET['error'])): ?>
+        <div class="alert alert-danger alert-dismissible fade show shadow-sm" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i> Error: <?= htmlspecialchars($_GET['error']) ?>
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
     <?php endif; ?>
@@ -117,20 +134,61 @@
                             </span>
                             <div>
                                 <h5 class="fw-bold mb-0">LibreTranslate i18n</h5>
-                                <span class="badge bg-info text-dark">Automated</span>
+                                <span class="badge bg-<?= !empty(setting('libretranslate_endpoint')) ? 'success' : 'secondary' ?>">
+                                    <?= !empty(setting('libretranslate_endpoint')) ? 'Ready' : 'Not Configured' ?>
+                                </span>
                             </div>
                         </div>
                     </div>
                     <p class="text-muted small">
-                        Synchronizes and automatically translates master language keys from <code>en.json</code> into other target languages using your connected instance (<code><?= htmlspecialchars($translateEndpoint) ?></code>).
+                        Automatically synchronizes and translates master keys from <code>en.json</code> into other target languages using your connected LibreTranslate instance (<code><?= htmlspecialchars($translateEndpoint ?: 'Not configured') ?></code>).
                     </p>
                 </div>
-                <div class="card-footer bg-white border-0 pt-0 pb-3">
+                <div class="card-footer bg-white border-0 pt-0 pb-3 d-flex gap-2">
+                    <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#translateModal">
+                        <i class="bi bi-translate me-1"></i> Auto-Translate JSONs
+                    </button>
                     <a href="/admin/settings#generalTab" class="btn btn-sm btn-outline-secondary">
-                        <i class="bi bi-gear me-1"></i> Configure Endpoint
+                        <i class="bi bi-gear me-1"></i> Settings
                     </a>
                 </div>
             </div>
         </div>
+    </div>
+</div>
+
+<!-- Modal: Auto-Translate with LibreTranslate -->
+<div class="modal fade" id="translateModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form action="/admin/translations/sync" method="POST" class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-translate me-2 text-primary"></i>LibreTranslate Auto-Sync</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info small mb-3">
+                    <i class="bi bi-info-circle me-1"></i>
+                    This tool reads <code>languages/en.json</code>, identifies missing keys in the target language file, translates them via your LibreTranslate server, and saves the updated JSON file.
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Target Language Code (ISO 639-1)</label>
+                    <select name="target_lang" class="form-select" required>
+                        <option value="it">Italian (it.json)</option>
+                        <option value="es">Spanish (es.json)</option>
+                        <option value="fr">French (fr.json)</option>
+                        <option value="de">German (de.json)</option>
+                        <option value="pt">Portuguese (pt.json)</option>
+                    </select>
+                    <small class="text-muted">If the language file does not exist, it will be automatically created.</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-primary fw-semibold">
+                    <i class="bi bi-magic me-1"></i> Start Auto-Translation
+                </button>
+            </div>
+        </form>
     </div>
 </div>
