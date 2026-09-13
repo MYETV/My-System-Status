@@ -105,6 +105,7 @@ and assign and username and a password to it.
 ### Database Migrations
 
 Future platform updates handle database changes automatically: any new migration script located in `database/migrations/` is executed by the integrated 1-click updater without manual intervention.
+
 ---
 
 ## 🔥 ModSecurity & WAF Note (Localhost AI Endpoints)
