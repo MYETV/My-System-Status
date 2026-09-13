@@ -38,34 +38,60 @@
     <?php endif; ?>
 
     <div class="row g-4">
-        <!-- 1. External Status Feeds Importer -->
-        <div class="col-md-6 col-xl-6">
-            <div class="card h-100 border-0 shadow-sm">
-                <div class="card-body">
-                    <div class="d-flex align-items-center justify-content-between mb-3">
-                        <div class="d-flex align-items-center gap-2">
-                            <span class="p-2 bg-primary bg-opacity-10 text-primary rounded-3 fs-4">
-                                <i class="bi bi-cloud-arrow-down"></i>
-                            </span>
-                            <div>
-                                <h5 class="fw-bold mb-0">External Status Importer</h5>
-                                <span class="badge bg-success">Active &bull; Built-in</span>
-                            </div>
-                        </div>
+        <!-- 1. External Status Feeds Importer with Selection Checkboxes -->
+<div class="col-md-6 col-xl-6">
+    <form action="/admin/plugins/save-feeds-config" method="POST" class="card h-100 border-0 shadow-sm">
+        <div class="card-body">
+            <div class="d-flex align-items-center justify-content-between mb-3">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="p-2 bg-primary bg-opacity-10 text-primary rounded-3 fs-4">
+                        <i class="bi bi-cloud-arrow-down"></i>
+                    </span>
+                    <div>
+                        <h5 class="fw-bold mb-0">External Status Importer</h5>
+                        <span class="badge bg-success">Multi-Provider</span>
                     </div>
-                    <p class="text-muted small">
-                        Automatically imports and synchronizes health status from major third-party cloud providers (<strong>Cloudflare</strong>, <strong>GitHub</strong>, <strong>Stripe</strong>) into your public monitors list.
-                    </p>
                 </div>
-                <div class="card-footer bg-white border-0 pt-0 pb-3">
-                    <form action="/admin/plugins/sync-feeds" method="POST" class="d-inline">
-                        <button type="submit" class="btn btn-sm btn-outline-primary">
-                            <i class="bi bi-arrow-clockwise me-1"></i> Poll Feeds Now
-                        </button>
-                    </form>
+            </div>
+            <p class="text-muted small mb-3">
+                Choose which public status pages to poll and include in your status dashboard:
+            </p>
+
+            <!-- Provider Selection Checkboxes -->
+            <div class="bg-light p-3 rounded-3 border mb-3">
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" name="feed_cloudflare_enabled" value="1" id="feedCf" <?= setting('feed_cloudflare_enabled', '1') === '1' ? 'checked' : '' ?>>
+                    <label class="form-check-label fw-semibold" for="feedCf">
+                        Cloudflare (Includes Workers, DNS, CDN & Dashboard sub-services)
+                    </label>
+                </div>
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" name="feed_stripe_enabled" value="1" id="feedStripe" <?= setting('feed_stripe_enabled', '1') === '1' ? 'checked' : '' ?>>
+                    <label class="form-check-label fw-semibold" for="feedStripe">
+                        Stripe Payments Engine
+                    </label>
+                </div>
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" name="feed_github_enabled" value="1" id="feedGh" <?= setting('feed_github_enabled', '1') === '1' ? 'checked' : '' ?>>
+                    <label class="form-check-label fw-semibold" for="feedGh">
+                        GitHub Cloud Services
+                    </label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="feed_paypal_enabled" value="1" id="feedPaypal" <?= setting('feed_paypal_enabled', '1') === '1' ? 'checked' : '' ?>>
+                    <label class="form-check-label fw-semibold" for="feedPaypal">
+                        PayPal Payments Infrastructure
+                    </label>
                 </div>
             </div>
         </div>
+        <div class="card-footer bg-white border-0 pt-0 pb-3 d-flex gap-2">
+            <button type="submit" class="btn btn-sm btn-primary">
+                <i class="bi bi-save me-1"></i> Save & Poll Enabled Feeds
+            </button>
+        </div>
+    </form>
+</div>
 
         <!-- 2. Discord Webhook Plugin -->
         <div class="col-md-6 col-xl-6">
