@@ -106,13 +106,27 @@ CREATE TABLE IF NOT EXISTS `maintenances` (
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Subscribers (Public Alerts via Email)
+-- Subscribers (Granular per-probe or all services alerts)
 CREATE TABLE IF NOT EXISTS `subscribers` (
     `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    `email` VARCHAR(191) NOT NULL UNIQUE,
+    `email` VARCHAR(191) NOT NULL,
+    `monitor_id` INT UNSIGNED NULL DEFAULT NULL,
     `token` VARCHAR(64) NOT NULL,
     `is_verified` TINYINT(1) DEFAULT 0,
-    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY `uniq_sub_email_monitor` (`email`, `monitor_id`),
+    INDEX `idx_monitor_id` (`monitor_id`),
+    FOREIGN KEY (`monitor_id`) REFERENCES `monitors` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Time-Limited (60 min) Magic Link Unsubscribe Requests
+CREATE TABLE IF NOT EXISTS `unsubscribe_requests` (
+    `id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    `email` VARCHAR(191) NOT NULL,
+    `token` VARCHAR(64) NOT NULL UNIQUE,
+    `expires_at` DATETIME NOT NULL,
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX `idx_token` (`token`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- System Audit Logs
