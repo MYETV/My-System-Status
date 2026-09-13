@@ -37,9 +37,10 @@ CREATE TABLE IF NOT EXISTS `rate_limits` (
     INDEX `idx_blocked` (`blocked_until`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Monitors (Routes)
+-- Monitors & Routes (Includes parent_id for grouped sub-services)
 CREATE TABLE IF NOT EXISTS `monitors` (
     `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    `parent_id` INT UNSIGNED NULL DEFAULT NULL,
     `name` VARCHAR(150) NOT NULL,
     `type` ENUM('http', 'ping', 'port', 'ssl') NOT NULL DEFAULT 'http',
     `target` VARCHAR(255) NOT NULL,
@@ -51,10 +52,12 @@ CREATE TABLE IF NOT EXISTS `monitors` (
     `last_check` DATETIME NULL,
     `ssl_expiration` DATETIME NULL,
     `is_active` TINYINT(1) DEFAULT 1,
-    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX `idx_parent_id` (`parent_id`),
+    FOREIGN KEY (`parent_id`) REFERENCES `monitors` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Monitor Logs (Heartbeats)
+-- Monitor Logs (Heartbeats & Probes History)
 CREATE TABLE IF NOT EXISTS `monitor_logs` (
     `id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     `monitor_id` INT UNSIGNED NOT NULL,
