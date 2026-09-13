@@ -277,21 +277,26 @@ $allTimezones    = DateService::getTimezonesList();
                     <small class="text-muted">Probes will post down/up alert embeds directly to this Discord channel.</small>
                 </div>
 
-                <!-- Optional Cloudflare Zero Trust Tunnel Section in app/Views/admin/settings/index.php -->
-<div class="p-4 bg-light rounded-3 border mb-4">
-    <div class="d-flex align-items-center gap-2 mb-2">
-        <span class="p-2 bg-warning bg-opacity-10 text-dark rounded-3 fs-4">
-            <i class="bi bi-shield-shaded"></i>
-        </span>
-        <div>
-            <h5 class="fw-bold mb-0">Cloudflare Zero Trust Tunnel Monitor (Optional)</h5>
-            <p class="text-muted small mb-0">Monitor the live health status of your private Cloudflare Tunnel (cloudflared).</p>
+                <div class="p-4 bg-light rounded-3 border mb-4">
+    <div class="d-flex align-items-center justify-content-between mb-2">
+        <div class="d-flex align-items-center gap-2">
+            <span class="p-2 bg-warning bg-opacity-10 text-dark rounded-3 fs-4">
+                <i class="bi bi-shield-shaded"></i>
+            </span>
+            <div>
+                <h5 class="fw-bold mb-0">Cloudflare Zero Trust Tunnel Monitor (Optional)</h5>
+                <p class="text-muted small mb-0">Monitor the live health status of your private Cloudflare Tunnel (cloudflared).</p>
+            </div>
+        </div>
+        <div class="form-check form-switch fs-6">
+            <input class="form-check-input" type="checkbox" name="cf_tunnel_is_primary" value="1" id="tunnelPrimarySwitch" <?= setting('cf_tunnel_is_primary', '1') === '1' ? 'checked' : '' ?>>
+            <label class="form-check-label fw-semibold" for="tunnelPrimarySwitch">Place in Core Systems</label>
         </div>
     </div>
     <div class="row g-3 mt-1">
         <div class="col-md-6">
             <label class="form-label fw-semibold">Custom Tunnel Label</label>
-            <input type="text" name="cf_tunnel_name" value="<?= htmlspecialchars(setting('cf_tunnel_name', '')) ?>" class="form-control" placeholder="e.g. Production Core Tunnel">
+            <input type="text" name="cf_tunnel_name" value="<?= htmlspecialchars(setting('cf_tunnel_name', '')) ?>" class="form-control" placeholder="e.g. MyETV Production Tunnel">
         </div>
         <div class="col-md-6">
             <label class="form-label fw-semibold">Cloudflare Account ID</label>
@@ -304,7 +309,7 @@ $allTimezones    = DateService::getTimezonesList();
         <div class="col-md-6">
             <label class="form-label fw-semibold">Cloudflare API Token</label>
             <input type="password" name="cf_tunnel_api_token" value="<?= htmlspecialchars(setting('cf_tunnel_api_token', '')) ?>" class="form-control font-monospace" placeholder="API Token with Tunnel:Read permission">
-            <small class="text-muted">Create a token in Cloudflare Dashboard with <code>Account &gt; Cloudflare Tunnel &gt; Read</code> permissions.</small>
+            <small class="text-muted">Requires <code>Account &gt; Cloudflare Tunnel &gt; Read</code> permissions.</small>
         </div>
     </div>
 </div>
