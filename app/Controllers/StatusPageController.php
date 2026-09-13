@@ -21,10 +21,26 @@ class StatusPageController
 
     public function index(): void
     {
-        // 1. Monitors with status
-        $monitors = $this->db->query("SELECT * FROM monitors WHERE is_active = 1 ORDER BY name ASC")->fetchAll(PDO::FETCH_ASSOC);
+        // 1. Fetch only root monitors (no parent_id)
+        $stmt = $this->db->query("
+            SELECT * FROM monitors 
+            WHERE is_active = 1 AND parent_id IS NULL 
+            ORDER BY name ASC
+        ");
+        $monitors = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        // 2. Active Maintenances
+        // 2. Attach child sub-services to each parent monitor (e.g. Cloudflare Workers, DNS, CDN)
+        foreach ($monitors as &$m) {
+            $childStmt = $this->db->prepare("
+                SELECT * FROM monitors 
+                WHERE is_active = 1 AND parent_id = ? 
+                ORDER BY name ASC
+            ");
+            $childStmt->execute([$m['id']]);
+            $m['children'] = $childStmt->fetchAll(PDO::FETCH_ASSOC);
+        }
+
+        // 3. Active Maintenances
         $maintenances = $this->db->query("
             SELECT * FROM maintenances 
             WHERE status IN ('scheduled', 'in_progress') 
@@ -32,7 +48,7 @@ class StatusPageController
             ORDER BY start_time ASC
         ")->fetchAll(PDO::FETCH_ASSOC);
 
-        // 3. Active Incidents with updates
+        // 4. Active Incidents with chronological updates
         $incidents = $this->db->query("
             SELECT * FROM incidents 
             WHERE status != 'resolved' 
@@ -40,18 +56,28 @@ class StatusPageController
         ")->fetchAll(PDO::FETCH_ASSOC);
 
         foreach ($incidents as &$incident) {
-            $stmt = $this->db->prepare("SELECT * FROM incident_updates WHERE incident_id = ? ORDER BY created_at DESC");
-            $stmt->execute([$incident['id']]);
-            $incident['updates'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $upStmt = $this->db->prepare("
+                SELECT * FROM incident_updates 
+                WHERE incident_id = ? 
+                ORDER BY created_at DESC
+            ");
+            $upStmt->execute([$incident['id']]);
+            $incident['updates'] = $upStmt->fetchAll(PDO::FETCH_ASSOC);
         }
 
-        // 4. Overall system status calculation
+        // 5. Calculate overall system health (checking both parents and children)
         $overallStatus = 'operational';
         foreach ($monitors as $m) {
-            if ($m['current_status'] === 'down') {
+            $statuses = [$m['current_status']];
+            foreach ($m['children'] as $child) {
+                $statuses[] = $child['current_status'];
+            }
+
+            if (in_array('down', $statuses, true)) {
                 $overallStatus = 'major_outage';
                 break;
-            } elseif ($m['current_status'] === 'degraded' && $overallStatus !== 'major_outage') {
+            }
+            if (in_array('degraded', $statuses, true) && $overallStatus !== 'major_outage') {
                 $overallStatus = 'degraded';
             }
         }
@@ -67,15 +93,17 @@ class StatusPageController
     public function subscribe(): void
     {
         $email = filter_var($_POST['email'] ?? '', FILTER_VALIDATE_EMAIL);
-        if ($email) {
+        $smtpHost = setting('smtp_host', '');
+
+        if ($email && !empty($smtpHost)) {
             $smtpConfig = [
-                'host'       => SettingService::get('smtp_host', 'localhost'),
-                'port'       => SettingService::get('smtp_port', '587'),
-                'username'   => SettingService::get('smtp_user', ''),
-                'password'   => SettingService::get('smtp_pass', ''),
-                'encryption' => SettingService::get('smtp_encryption', 'starttls'),
-                'from_email' => SettingService::get('smtp_from', 'noreply@myetv.tv'),
-                'from_name'  => SettingService::get('app_name', 'My System Status')
+                'host'       => $smtpHost,
+                'port'       => setting('smtp_port', '587'),
+                'username'   => setting('smtp_user', ''),
+                'password'   => setting('smtp_pass', ''),
+                'encryption' => setting('smtp_encryption', 'starttls'),
+                'from_email' => setting('smtp_from', ''),
+                'from_name'  => setting('app_name', 'My System Status')
             ];
 
             $mailer = new MailerService($smtpConfig);
@@ -84,6 +112,30 @@ class StatusPageController
         }
 
         header('Location: /?subscribed=1');
+        exit;
+    }
+
+    public function verify(): void
+    {
+        $token = trim($_GET['token'] ?? '');
+        if ($token) {
+            $stmt = $this->db->prepare("UPDATE subscribers SET is_verified = 1 WHERE token = ?");
+            $stmt->execute([$token]);
+        }
+
+        header('Location: /?verified=1');
+        exit;
+    }
+
+    public function unsubscribe(): void
+    {
+        $token = trim($_GET['token'] ?? '');
+        if ($token) {
+            $stmt = $this->db->prepare("DELETE FROM subscribers WHERE token = ?");
+            $stmt->execute([$token]);
+        }
+
+        header('Location: /?unsubscribed=1');
         exit;
     }
 }
