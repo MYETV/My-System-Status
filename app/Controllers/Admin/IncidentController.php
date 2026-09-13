@@ -54,16 +54,26 @@ class IncidentController
             $inc['updates'] = $upStmt->fetchAll(PDO::FETCH_ASSOC);
         }
 
-        // Pass both active and resolved lists to the view
+        // 3. Fetch monitors list for modal dropdown selection
+        $monitorsList = $this->db->query("
+            SELECT id, name 
+            FROM monitors 
+            WHERE is_active = 1 
+            ORDER BY sort_order ASC, name ASC
+        ")->fetchAll(PDO::FETCH_ASSOC);
+
+        // Pass active incidents, resolved incidents, and monitors list to the view
         View::render('admin/incidents/index', [
             'activeIncidents'   => $activeIncidents,
-            'resolvedIncidents' => $resolvedIncidents
+            'resolvedIncidents' => $resolvedIncidents,
+            'monitorsList'      => $monitorsList
         ]);
     }
 
     public function store(): void
     {
         $title     = trim($_POST['title'] ?? '');
+        $monitorId = !empty($_POST['monitor_id']) ? (int)$_POST['monitor_id'] : null;
         $impact    = $_POST['impact'] ?? 'minor';
         $status    = $_POST['status'] ?? 'investigating';
         $message   = trim($_POST['message'] ?? '');
@@ -71,10 +81,10 @@ class IncidentController
 
         if ($title && $message) {
             $stmt = $this->db->prepare("
-                INSERT INTO incidents (title, impact, status, ai_summary) 
-                VALUES (?, ?, ?, ?)
+                INSERT INTO incidents (title, monitor_id, impact, status, ai_summary) 
+                VALUES (?, ?, ?, ?, ?)
             ");
-            $stmt->execute([$title, $impact, $status, $aiSummary]);
+            $stmt->execute([$title, $monitorId, $impact, $status, $aiSummary]);
             $incidentId = $this->db->lastInsertId();
 
             $stmtUpdate = $this->db->prepare("
@@ -88,6 +98,9 @@ class IncidentController
         exit;
     }
 
+    /**
+     * Post a new progress note to timeline and update master incident status
+     */
     public function updateStatus(): void
     {
         $incidentId = (int)($_POST['incident_id'] ?? 0);
@@ -109,20 +122,24 @@ class IncidentController
         exit;
     }
 
+    /**
+     * Edit incident details (Title, Target Monitor, Impact, AI Summary)
+     */
     public function update(): void
     {
         $incidentId = (int)($_POST['incident_id'] ?? 0);
         $title      = trim($_POST['title'] ?? '');
+        $monitorId  = !empty($_POST['monitor_id']) ? (int)$_POST['monitor_id'] : null;
         $impact     = $_POST['impact'] ?? 'minor';
         $aiSummary  = trim($_POST['ai_summary'] ?? '');
 
         if ($incidentId > 0 && $title) {
             $stmt = $this->db->prepare("
                 UPDATE incidents 
-                SET title = ?, impact = ?, ai_summary = ?, updated_at = NOW() 
+                SET title = ?, monitor_id = ?, impact = ?, ai_summary = ?, updated_at = NOW() 
                 WHERE id = ?
             ");
-            $stmt->execute([$title, $impact, $aiSummary, $incidentId]);
+            $stmt->execute([$title, $monitorId, $impact, $aiSummary, $incidentId]);
         }
 
         header('Location: /admin/incidents?edited=1');
