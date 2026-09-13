@@ -26,9 +26,10 @@ class SettingController
     {
         // 1. Checkbox toggle fields (must be saved as '0' if unchecked)
         $checkboxKeys = [
-            'turnstile_enabled',
-            'rate_limit_enabled'
-        ];
+    'turnstile_enabled',
+    'rate_limit_enabled',
+    'cf_tunnel_is_primary'
+];
 
         foreach ($checkboxKeys as $cbKey) {
             SettingService::set($cbKey, isset($_POST[$cbKey]) ? '1' : '0');
