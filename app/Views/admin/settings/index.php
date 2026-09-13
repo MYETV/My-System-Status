@@ -315,28 +315,65 @@ $allTimezones    = DateService::getTimezonesList();
 
     <!-- Cloudflare Edge Worker Section -->
 <div class="p-4 bg-light rounded-3 border mb-4">
-    <div class="d-flex align-items-center justify-content-between mb-2">
+    <div class="d-flex align-items-center justify-content-between mb-3">
         <div class="d-flex align-items-center gap-2">
             <span class="p-2 bg-primary bg-opacity-10 text-primary rounded-3 fs-4">
                 <i class="bi bi-globe-americas"></i>
             </span>
             <div>
-                <h5 class="fw-bold mb-0">Cloudflare Edge Worker Probes (Optional)</h5>
-                <p class="text-muted small mb-0">Delegate probe execution to Cloudflare's edge network for globally distributed latency checks.</p>
+                <h5 class="fw-bold mb-0">Cloudflare Edge Worker Probes & Sentinel (Optional)</h5>
+                <p class="text-muted small mb-0">Run multi-location latency probes from Cloudflare edge and monitor server downtime autonomously.</p>
             </div>
         </div>
         <div class="form-check form-switch fs-5">
             <input class="form-check-input" type="checkbox" name="edge_worker_enabled" value="1" id="edgeWorkerSwitch" <?= setting('edge_worker_enabled') === '1' ? 'checked' : '' ?>>
         </div>
     </div>
-    <div class="row g-3 mt-1">
+
+    <!-- Step-by-Step Setup Guide Accordion -->
+    <div class="alert alert-info border-info-subtle mb-3 p-3">
+        <div class="d-flex justify-content-between align-items-center">
+            <strong class="text-dark small"><i class="bi bi-info-circle me-1 text-primary"></i> How to setup your Cloudflare Worker:</strong>
+            <button class="btn btn-sm btn-link p-0 text-decoration-none small fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#workerGuideCollapse">
+                Show Setup Guide <i class="bi bi-chevron-down ms-1"></i>
+            </button>
+        </div>
+        <div class="collapse mt-3 pt-2 border-top border-info-subtle small text-dark" id="workerGuideCollapse">
+            <ol class="ps-3 mb-2">
+                <li class="mb-1">
+                    <strong>Get the template code:</strong> Open the local file <code>edge/cloudflare-worker.js</code> in your repository.
+                </li>
+                <li class="mb-1">
+                    <strong>Create the Worker:</strong> In <a href="https://dash.cloudflare.com" target="_blank" class="text-primary fw-semibold">Cloudflare Dashboard</a> &rarr; <em>Workers & Pages</em> &rarr; <em>Create Application</em> &rarr; <em>Create Worker</em>, and paste the code from <code>edge/cloudflare-worker.js</code>.
+                </li>
+                <li class="mb-1">
+                    <strong>Configure Variables (Worker Settings &rarr; Variables):</strong>
+                    <ul class="mt-1 ps-3 text-muted">
+                        <li><code>SHARED_SECRET_TOKEN</code>: A custom password/token (must match the token entered below).</li>
+                        <li><code>ORIGIN_STATUS_URL</code>: Your status page URL (<code><?= htmlspecialchars(app_url()) ?></code>).</li>
+                        <li><code>DISCORD_WEBHOOK_URL</code>: <em>(Optional)</em> Discord webhook for alerts if your origin server dies.</li>
+                        <li><code>STATUS_KV</code>: <em>(Optional)</em> KV Namespace binding to track outage duration across reboots.</li>
+                    </ul>
+                </li>
+                <li class="mb-1">
+                    <strong>Enable Cron Trigger (Worker Settings &rarr; Triggers &rarr; Cron Triggers):</strong> Add <code>* * * * *</code> (every minute) so Cloudflare monitors your server even if your VPS crashes.</li>
+                <li>
+                    <strong>Paste URL & Token below:</strong> Copy your <code>https://your-worker.workers.dev</code> address into the field below.
+                </li>
+            </ol>
+        </div>
+    </div>
+
+    <div class="row g-3">
         <div class="col-md-6">
             <label class="form-label fw-semibold">Worker URL</label>
-            <input type="url" name="edge_worker_url" value="<?= htmlspecialchars(setting('edge_worker_url', '')) ?>" class="form-control" placeholder="https://my-probe.workers.dev">
+            <input type="url" name="edge_worker_url" value="<?= htmlspecialchars(setting('edge_worker_url', '')) ?>" class="form-control" placeholder="https://my-edge-probe.workers.dev">
+            <small class="text-muted">The public <code>.workers.dev</code> endpoint of your deployed worker.</small>
         </div>
         <div class="col-md-6">
             <label class="form-label fw-semibold">Shared Secret Token</label>
-            <input type="password" name="edge_worker_token" value="<?= htmlspecialchars(setting('edge_worker_token', '')) ?>" class="form-control" placeholder="Secret Token configured in Worker">
+            <input type="password" name="edge_worker_token" value="<?= htmlspecialchars(setting('edge_worker_token', '')) ?>" class="form-control" placeholder="Matches SHARED_SECRET_TOKEN in Worker">
+            <small class="text-muted">Used to authenticate requests between your server and the Cloudflare Worker.</small>
         </div>
     </div>
 </div>
