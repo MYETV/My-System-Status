@@ -134,17 +134,11 @@ try {
         }
     }
 
-    // Create unsubscribe_requests table for 60-minute magic links
-    $pdo->exec("
-        CREATE TABLE IF NOT EXISTS `unsubscribe_requests` (
-            `id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-            `email` VARCHAR(191) NOT NULL,
-            `token` VARCHAR(64) NOT NULL UNIQUE,
-            `expires_at` DATETIME NOT NULL,
-            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            INDEX `idx_token` (`token`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    ");
+    // --- v1.0.16: Add 'blackout' status to monitor_logs for system gap detection ---
+if (table_exists($pdo, 'monitor_logs')) {
+    $pdo->exec("ALTER TABLE `monitor_logs` MODIFY COLUMN `status` ENUM('up', 'down', 'timeout', 'blackout') NOT NULL;");
+}
+
 
     if (php_sapi_name() === 'cli') {
         echo "Database schema is fully up to date.\n";
