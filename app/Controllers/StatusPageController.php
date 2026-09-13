@@ -21,12 +21,12 @@ class StatusPageController
 
     public function index(): void
     {
-        // 1. Fetch only root monitors (no parent_id)
+        // 1. Fetch only root monitors (no parent_id) ordered by custom sort order
         $stmt = $this->db->query("
-    SELECT * FROM monitors 
-    WHERE is_active = 1 AND parent_id IS NULL 
-    ORDER BY sort_order ASC, name ASC
-");
+            SELECT * FROM monitors 
+            WHERE is_active = 1 AND parent_id IS NULL 
+            ORDER BY sort_order ASC, name ASC
+        ");
         $monitors = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         // 2. Attach child sub-services to each parent monitor (e.g. Cloudflare Workers, DNS, CDN)
@@ -65,21 +65,41 @@ class StatusPageController
             $incident['updates'] = $upStmt->fetchAll(PDO::FETCH_ASSOC);
         }
 
-        // 5. Calculate overall system health (checking both parents and children)
-        $overallStatus = 'operational';
+        // 5. Intelligent overall status calculation based on Primary vs Secondary services
+        $overallStatus      = 'operational';
+        $hasPrimaryDown     = false;
+        $hasPrimaryDegraded = false;
+        $hasAnyDegraded     = false;
+
         foreach ($monitors as $m) {
-            $statuses = [$m['current_status']];
-            foreach ($m['children'] as $child) {
-                $statuses[] = $child['current_status'];
+            $isPrimary = ((int)($m['is_primary'] ?? 0) === 1);
+
+            // Check parent monitor status
+            if ($m['current_status'] === 'down') {
+                if ($isPrimary) {
+                    $hasPrimaryDown = true;
+                } else {
+                    $hasAnyDegraded = true;
+                }
+            } elseif ($m['current_status'] === 'degraded') {
+                if ($isPrimary) {
+                    $hasPrimaryDegraded = true;
+                }
+                $hasAnyDegraded = true;
             }
 
-            if (in_array('down', $statuses, true)) {
-                $overallStatus = 'major_outage';
-                break;
+            // Check sub-services status (treated as secondary infrastructure)
+            foreach ($m['children'] as $child) {
+                if ($child['current_status'] === 'down' || $child['current_status'] === 'degraded') {
+                    $hasAnyDegraded = true;
+                }
             }
-            if (in_array('degraded', $statuses, true) && $overallStatus !== 'major_outage') {
-                $overallStatus = 'degraded';
-            }
+        }
+
+        if ($hasPrimaryDown) {
+            $overallStatus = 'major_outage'; // RED: Critical Core Service is down
+        } elseif ($hasPrimaryDegraded || $hasAnyDegraded) {
+            $overallStatus = 'degraded';     // YELLOW: Partial Outage or External Dependency issue
         }
 
         View::render('public/index', [
