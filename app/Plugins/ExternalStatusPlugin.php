@@ -15,9 +15,6 @@ class ExternalStatusPlugin
         $this->db = Database::getInstance();
     }
 
-    /**
-     * Poll enabled external feeds.
-     */
     public function syncAll(): array
     {
         $results = [];
@@ -29,36 +26,51 @@ class ExternalStatusPlugin
             $this->disableFeedMonitors('https://www.cloudflarestatus.com');
         }
 
-        // 2. Stripe
+        // 2. Amazon AWS
+        if (setting('feed_aws_enabled', '1') === '1') {
+            $results['aws'] = $this->syncAws();
+        } else {
+            $this->disableFeedMonitors('https://health.aws.amazon.com');
+        }
+
+        // 3. Microsoft Azure
+        if (setting('feed_azure_enabled', '1') === '1') {
+            $results['azure'] = $this->syncAzure();
+        } else {
+            $this->disableFeedMonitors('https://azure.status.microsoft');
+        }
+
+        // 4. Stripe
         if (setting('feed_stripe_enabled', '1') === '1') {
             $results['stripe'] = $this->syncStripe();
         } else {
             $this->disableFeedMonitors('https://status.stripe.com');
         }
 
-        // 3. GitHub
-        if (setting('feed_github_enabled', '1') === '1') {
-            $results['github'] = $this->syncGitHub();
-        } else {
-            $this->disableFeedMonitors('https://www.githubstatus.com');
-        }
-
-        // 4. PayPal
+        // 5. PayPal
         if (setting('feed_paypal_enabled', '1') === '1') {
             $results['paypal'] = $this->syncPayPal();
         } else {
             $this->disableFeedMonitors('https://www.paypal-status.com');
         }
 
+        // 6. GitHub
+        if (setting('feed_github_enabled', '1') === '1') {
+            $results['github'] = $this->syncGitHub();
+        } else {
+            $this->disableFeedMonitors('https://www.githubstatus.com');
+        }
+
         return $results;
     }
 
     /**
-     * Cloudflare granular components polling
+     * Dynamically parse ALL Cloudflare sub-components from summary.json
      */
     public function syncCloudflare(): string
     {
-        $json = @file_get_contents('https://www.cloudflarestatus.com/api/v2/summary.json');
+        $opts = ['http' => ['timeout' => 10, 'user_agent' => 'MySystemStatus/1.0']];
+        $json = @file_get_contents('https://www.cloudflarestatus.com/api/v2/summary.json', false, stream_context_create($opts));
         if (!$json) return 'unknown';
 
         $data = json_decode($json, true);
@@ -70,40 +82,69 @@ class ExternalStatusPlugin
             default    => 'down'
         };
 
-        // 1. Upsert Parent Monitor
+        // Upsert Main Parent Monitor
         $parentId = $this->upsertMonitor('Cloudflare Global Network', 'https://www.cloudflarestatus.com', $parentStatus, null);
 
-        // 2. Parse and upsert child components (Workers, DNS, CDN, Dashboard, etc.)
+        // Dynamically loop through all sub-services (Workers, Pages, DNS, CDN, Stream, etc.)
         $components = $data['components'] ?? [];
-        $trackedComponents = [
-            'Cloudflare Workers' => 'Workers & Pages Platform',
-            'Authoritative DNS'  => 'Authoritative DNS Service',
-            'CDN / Cache'        => 'Edge CDN & Cache Network',
-            'Cloudflare Dashboard' => 'Dashboard & Control Panel',
-            'Cloudflare Access'  => 'Zero Trust & Access Gateway'
-        ];
-
         foreach ($components as $comp) {
-            $name = $comp['name'] ?? '';
-            foreach ($trackedComponents as $key => $displayName) {
-                if (stripos($name, $key) !== false) {
-                    $cStatus = match ($comp['status'] ?? '') {
-                        'operational' => 'operational',
-                        'degraded_performance', 'partial_outage' => 'degraded',
-                        default => 'down'
-                    };
-                    $this->upsertMonitor("Cloudflare - {$displayName}", "https://www.cloudflarestatus.com#{$key}", $cStatus, $parentId);
-                    break;
-                }
+            // Ignore top-level grouping containers
+            if (!empty($comp['group']) || empty($comp['name'])) {
+                continue;
             }
+
+            $cStatus = match ($comp['status'] ?? '') {
+                'operational' => 'operational',
+                'degraded_performance', 'partial_outage' => 'degraded',
+                default => 'down'
+            };
+
+            $compSlug = preg_replace('/[^a-z0-9_-]/i', '', strtolower($comp['name']));
+            $this->upsertMonitor("Cloudflare - {$comp['name']}", "https://www.cloudflarestatus.com#{$compSlug}", $cStatus, $parentId);
         }
 
         return $parentStatus;
     }
 
+    /**
+     * Amazon AWS Health Feed
+     */
+    public function syncAws(): string
+    {
+        $opts = ['http' => ['timeout' => 8, 'user_agent' => 'MySystemStatus-Probe/1.0']];
+        $json = @file_get_contents('https://status.aws.amazon.com/data.json', false, stream_context_create($opts));
+
+        $status = 'operational';
+        if ($json) {
+            $data = json_decode($json, true);
+            if (!empty($data['current']) && is_array($data['current'])) {
+                $status = 'degraded';
+            }
+        }
+
+        $this->upsertMonitor('Amazon AWS Infrastructure', 'https://health.aws.amazon.com', $status, null);
+        return $status;
+    }
+
+    /**
+     * Microsoft Azure Status Feed
+     */
+    public function syncAzure(): string
+    {
+        $opts = ['http' => ['timeout' => 8, 'user_agent' => 'MySystemStatus-Probe/1.0']];
+        $html = @file_get_contents('https://azure.status.microsoft/en-us/status', false, stream_context_create($opts));
+
+        $status = 'operational';
+        if ($html && (str_contains($html, 'warning-icon') || str_contains($html, 'Incident'))) {
+            $status = 'degraded';
+        }
+
+        $this->upsertMonitor('Microsoft Azure Cloud', 'https://azure.status.microsoft', $status, null);
+        return $status;
+    }
+
     public function syncPayPal(): string
     {
-        // Query PayPal Status API
         $opts = ['http' => ['timeout' => 8, 'user_agent' => 'MySystemStatus-Probe/1.0']];
         $json = @file_get_contents('https://www.paypal-status.com/api/v1/components', false, stream_context_create($opts));
 
@@ -157,16 +198,16 @@ class ExternalStatusPlugin
         if ($existingId) {
             $update = $this->db->prepare("
                 UPDATE monitors 
-                SET current_status = ?, last_check = NOW(), parent_id = ?, is_active = 1 
+                SET name = ?, current_status = ?, last_check = NOW(), parent_id = ?, is_active = 1 
                 WHERE id = ?
             ");
-            $update->execute([$status, $parentId, $existingId]);
+            $update->execute([$name, $status, $parentId, $existingId]);
             return (int)$existingId;
         }
 
         $insert = $this->db->prepare("
-            INSERT INTO monitors (name, type, target, parent_id, current_status, last_check, is_active) 
-            VALUES (?, 'http', ?, ?, ?, NOW(), 1)
+            INSERT INTO monitors (name, type, target, parent_id, sort_order, current_status, last_check, is_active) 
+            VALUES (?, 'http', ?, ?, 99, ?, NOW(), 1)
         ");
         $insert->execute([$name, $target, $parentId, $status]);
         return (int)$this->db->lastInsertId();
