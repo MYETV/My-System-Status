@@ -72,26 +72,42 @@ class SubscriberService
             $stmtInsert->execute([$email, $monitorId, $token]);
         }
 
-        // 5. Send Confirmation Email
+        // 5. Send Confirmation Email with Professional Template
         $baseUrl = SettingService::getAppUrl();
         $appName = htmlspecialchars(setting('app_name', 'My System Status'));
         $confirmUrl = "{$baseUrl}/subscribe/verify?token={$token}";
 
-        $targetName = 'All Services & Infrastructure';
+        $targetName = 'All Platform Services';
         if ($monitorId) {
             $mStmt = $this->db->prepare("SELECT name FROM monitors WHERE id = ?");
             $mStmt->execute([$monitorId]);
             $targetName = $mStmt->fetchColumn() ?: 'Selected Service';
         }
 
-        $html = "<div style='font-family: sans-serif; max-width: 600px; margin: 0 auto;'>
-                    <h3>{$appName}</h3>
-                    <p>Please confirm your subscription to status updates for: <strong>{$targetName}</strong>.</p>
-                    <p><a href='{$confirmUrl}' style='display: inline-block; padding: 10px 20px; background: #0d6efd; color: #fff; text-decoration: none; border-radius: 5px; font-weight: bold;'>Confirm Subscription</a></p>
-                    <p><small style='color: #6c757d;'>Or paste this link in your browser: {$confirmUrl}</small></p>
-                 </div>";
+        $content = "
+            <h2 style='margin-top:0; color:#0f172a; font-size:20px; font-weight:700;'>Confirm Your Status Subscription</h2>
+            <p style='color:#475569; font-size:15px; line-height:1.6;'>
+                You requested to receive real-time incident and maintenance alerts for:
+            </p>
+            <div style='background-color:#f1f5f9; padding:14px 18px; border-radius:8px; font-weight:600; color:#1e293b; margin-bottom:20px;'>
+                📡 {$targetName}
+            </div>
+            <p style='color:#475569; font-size:15px; line-height:1.6;'>
+                Click the button below to verify your email address and activate your notifications:
+            </p>
+            <div style='text-align:center; margin:30px 0;'>
+                <a href='{$confirmUrl}' style='display:inline-block; background-color:#0d6efd; color:#ffffff; font-weight:700; font-size:15px; text-decoration:none; padding:12px 28px; border-radius:6px; box-shadow:0 2px 4px rgba(13,110,253,0.25);'>
+                    Confirm Subscription
+                </a>
+            </div>
+            <p style='color:#94a3b8; font-size:13px; margin-top:25px;'>
+                Button not working? Copy and paste this link into your browser:<br>
+                <a href='{$confirmUrl}' style='color:#0d6efd; word-break:break-all;'>{$confirmUrl}</a>
+            </p>
+        ";
 
-        $this->mailer->send($email, "Confirm subscription to {$appName}", $html);
+        $html = $this->renderEmailTemplate($appName, $content, $baseUrl);
+        $this->mailer->send($email, "Action Required: Confirm subscription to {$appName}", $html);
 
         return [
             'status'  => 'success',
@@ -129,15 +145,30 @@ class SubscriberService
         $appName = htmlspecialchars(setting('app_name', 'My System Status'));
         $unsubUrl = "{$baseUrl}/subscribe/confirm-unsubscribe?token={$token}";
 
-        $html = "<div style='font-family: sans-serif; max-width: 600px; margin: 0 auto;'>
-                    <h3>{$appName}</h3>
-                    <p>We received a request to unsubscribe <strong>{$email}</strong> from all incident and maintenance notifications.</p>
-                    <p>Click the button below to confirm. <strong>This link is valid for 60 minutes</strong>:</p>
-                    <p><a href='{$unsubUrl}' style='display: inline-block; padding: 10px 20px; background: #dc3545; color: #fff; text-decoration: none; border-radius: 5px; font-weight: bold;'>Unsubscribe from All Probes</a></p>
-                    <p><small style='color: #6c757d;'>If you did not request this, you can safely ignore this email.</small></p>
-                 </div>";
+        $content = "
+            <h2 style='margin-top:0; color:#0f172a; font-size:20px; font-weight:700;'>Unsubscribe Confirmation Request</h2>
+            <p style='color:#475569; font-size:15px; line-height:1.6;'>
+                We received a request to unsubscribe <strong>{$email}</strong> from all status updates and probe notifications on <strong>{$appName}</strong>.
+            </p>
+            <div style='background-color:#fee2e2; border-left:4px solid #ef4444; padding:12px 16px; border-radius:4px; color:#991b1b; font-size:14px; margin:20px 0;'>
+                ⚠️ <strong>Security Notice:</strong> This link is valid for <strong>60 minutes only</strong>.
+            </div>
+            <p style='color:#475569; font-size:15px; line-height:1.6;'>
+                If you wish to proceed and permanently delete all your subscriptions, click below:
+            </p>
+            <div style='text-align:center; margin:30px 0;'>
+                <a href='{$unsubUrl}' style='display:inline-block; background-color:#dc3545; color:#ffffff; font-weight:700; font-size:15px; text-decoration:none; padding:12px 28px; border-radius:6px; box-shadow:0 2px 4px rgba(220,53,69,0.25);'>
+                    Unsubscribe from All Alerts
+                </a>
+            </div>
+            <p style='color:#94a3b8; font-size:13px; margin-top:25px;'>
+                If you did not request this, no action is needed. Your subscriptions will remain active.<br>
+                Link: <a href='{$unsubUrl}' style='color:#dc3545; word-break:break-all;'>{$unsubUrl}</a>
+            </p>
+        ";
 
-        $this->mailer->send($email, "Unsubscribe request for {$appName}", $html);
+        $html = $this->renderEmailTemplate($appName, $content, $baseUrl);
+        $this->mailer->send($email, "Unsubscribe Request for {$appName}", $html);
 
         return [
             'status'  => 'success',
@@ -155,15 +186,79 @@ class SubscriberService
         $email = $stmt->fetchColumn();
 
         if ($email) {
-            // Delete all subscriptions linked to this email
             $del = $this->db->prepare("DELETE FROM subscribers WHERE email = ?");
             $del->execute([$email]);
 
-            // Consume token
             $this->db->prepare("DELETE FROM unsubscribe_requests WHERE token = ?")->execute([$token]);
             return true;
         }
 
         return false;
+    }
+
+    /**
+     * Professional responsive HTML email template wrapper.
+     */
+    private function renderEmailTemplate(string $appName, string $bodyContent, string $baseUrl): string
+    {
+        return "
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset='utf-8'>
+            <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+            <title>{$appName}</title>
+        </head>
+        <body style='margin:0; padding:0; background-color:#f8fafc; font-family:-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif;'>
+            <table role='presentation' width='100%' cellspacing='0' cellpadding='0' border='0' style='background-color:#f8fafc; padding:40px 15px;'>
+                <tr>
+                    <td align='center'>
+                        <!-- Main Card -->
+                        <table role='presentation' width='100%' cellspacing='0' cellpadding='0' border='0' style='max-width:580px; background-color:#ffffff; border-radius:10px; border:1px solid #e2e8f0; overflow:hidden; box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);'>
+                            <!-- Top Brand Header -->
+                            <tr>
+                                <td style='background-color:#ffffff; padding:25px 35px; border-bottom:1px solid #f1f5f9;'>
+                                    <table role='presentation' width='100%' cellspacing='0' cellpadding='0' border='0'>
+                                        <tr>
+                                            <td>
+                                                <a href='{$baseUrl}' style='text-decoration:none; color:#0f172a; font-size:18px; font-weight:700; letter-spacing:-0.5px;'>
+                                                    🛡️ {$appName}
+                                                </a>
+                                            </td>
+                                            <td align='right'>
+                                                <a href='{$baseUrl}' style='font-size:13px; color:#0d6efd; text-decoration:none; font-weight:600;'>
+                                                    View Live Status &rarr;
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+
+                            <!-- Email Body -->
+                            <tr>
+                                <td style='padding:35px;'>
+                                    {$bodyContent}
+                                </td>
+                            </tr>
+
+                            <!-- Footer with Direct Unsubscribe Option -->
+                            <tr>
+                                <td style='background-color:#f8fafc; padding:20px 35px; border-top:1px solid #f1f5f9; text-align:center;'>
+                                    <p style='margin:0 0 6px 0; font-size:12px; color:#64748b;'>
+                                        You received this email because an alert subscription was initiated on <a href='{$baseUrl}' style='color:#64748b; text-decoration:underline;'>{$appName}</a>.
+                                    </p>
+                                    <p style='margin:0; font-size:12px; color:#94a3b8;'>
+                                        Need to cancel your alerts? <a href='{$baseUrl}' style='color:#dc3545; text-decoration:underline;'>Unsubscribe / Manage alerts here</a>.
+                                    </p>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </table>
+        </body>
+        </html>
+        ";
     }
 }
