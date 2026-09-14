@@ -149,13 +149,13 @@ if (table_exists($pdo, 'maintenances') && !column_exists($pdo, 'maintenances', '
     $pdo->exec("ALTER TABLE `maintenances` ADD INDEX `idx_maint_monitor` (`monitor_id`);");
 }
 
-// --- v1.0.29: Add api_keys table for secure REST API endpoints ---
+// --- v1.0.30: Add api_keys table for secure REST API endpoints ---
 $pdo->exec("
     CREATE TABLE IF NOT EXISTS `api_keys` (
         `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         `name` VARCHAR(100) NOT NULL,
         `key_hash` VARCHAR(64) NOT NULL UNIQUE,
-        `key_prefix` VARCHAR(16) NOT NULL,
+        `key_prefix` VARCHAR(32) NOT NULL,
         `last_used_at` DATETIME NULL,
         `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         INDEX `idx_key_hash` (`key_hash`)
