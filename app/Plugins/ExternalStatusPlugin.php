@@ -155,7 +155,6 @@ class ExternalStatusPlugin
                             break;
                         }
                     }
-                    // Fallback to single active tunnel if available
                     if (!$tunnelData && count($json['result']) === 1) {
                         $tunnelData = $json['result'][0];
                     }
@@ -326,32 +325,63 @@ class ExternalStatusPlugin
 
     private function upsertMonitor(string $name, string $target, string $status, ?int $parentId, int $isPrimary = 0): int
     {
-        $stmt = $this->db->prepare("SELECT id, is_active FROM monitors WHERE target = ? LIMIT 1");
+        $stmt = $this->db->prepare("SELECT id, is_active, interval_seconds FROM monitors WHERE target = ? LIMIT 1");
         $stmt->execute([$target]);
         $existing = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if ($existing) {
+            $monitorId = (int)$existing['id'];
             if ((int)$existing['is_active'] === 1) {
                 $update = $this->db->prepare("
                     UPDATE monitors 
-                    SET name = ?, current_status = ?, last_check = NOW(), parent_id = ?, is_primary = ? 
+                    SET name = ?, current_status = ?, last_check = NOW(), parent_id = ?, is_primary = ?, interval_seconds = COALESCE(interval_seconds, 60)
                     WHERE id = ?
                 ");
-                $update->execute([$name, $status, $parentId, $isPrimary, $existing['id']]);
+                $update->execute([$name, $status, $parentId, $isPrimary, $monitorId]);
+
+                // Record check telemetry log for daily report calculations
+                $this->recordCheckLog($monitorId, $status);
             }
-            return (int)$existing['id'];
+            return $monitorId;
         }
 
         if ($this->forceInsert) {
             $insert = $this->db->prepare("
-                INSERT INTO monitors (name, type, target, parent_id, sort_order, is_primary, current_status, last_check, is_active) 
-                VALUES (?, 'http', ?, ?, 99, ?, ?, NOW(), 1)
+                INSERT INTO monitors (name, type, target, parent_id, sort_order, is_primary, current_status, interval_seconds, last_check, is_active) 
+                VALUES (?, 'http', ?, ?, 99, ?, ?, 60, NOW(), 1)
             ");
             $insert->execute([$name, $target, $parentId, $isPrimary, $status]);
-            return (int)$this->db->lastInsertId();
+            $monitorId = (int)$this->db->lastInsertId();
+
+            $this->recordCheckLog($monitorId, $status);
+            return $monitorId;
         }
 
         return 0;
+    }
+
+    /**
+     * Record execution check entry into telemetry logs for daily summary calculation
+     */
+    private function recordCheckLog(int $monitorId, string $status): void
+    {
+        try {
+            $stmt = $this->db->prepare("
+                INSERT INTO monitor_logs (monitor_id, status, response_time, checked_at) 
+                VALUES (?, ?, ?, NOW())
+            ");
+            $stmt->execute([$monitorId, $status, 0]);
+        } catch (\Throwable $e) {
+            try {
+                $stmt = $this->db->prepare("
+                    INSERT INTO logs (monitor_id, type, message, status_code, created_at) 
+                    VALUES (?, 'check', ?, 200, NOW())
+                ");
+                $stmt->execute([$monitorId, $status]);
+            } catch (\Throwable $ex) {
+                // Silently ignore if logging tables differ
+            }
+        }
     }
 
     private function disableFeedMonitors(string $targetPrefix): void
