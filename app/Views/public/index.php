@@ -251,9 +251,30 @@ $allMaintenances = $allMaintenances ?? [];
                             $label = "<strong>{$formattedDate}</strong><br><span style='color: #10b981;'>●</span> Operational";
                         }
 
-                        // Detailed Events Timestamps Timeline Payload
                         $eventsTimeline = $dayData['events'] ?? [];
-                        $firstDownTime  = $dayData['first_down_at'] ?? ($eventsTimeline[0]['down_at'] ?? ($dayData['down_at'] ?? null));
+
+                        // Extract first offline timestamp from all possible array key variations
+                        $firstDownTime = null;
+                        if (!empty($dayData['first_down_at'])) {
+                            $firstDownTime = $dayData['first_down_at'];
+                        } elseif (!empty($dayData['first_down_time'])) {
+                            $firstDownTime = $dayData['first_down_time'];
+                        } elseif (!empty($dayData['down_at'])) {
+                            $firstDownTime = $dayData['down_at'];
+                        } elseif (!empty($dayData['first_down'])) {
+                            $firstDownTime = $dayData['first_down'];
+                        } elseif (!empty($dayData['created_at']) && $downChecks > 0) {
+                            $firstDownTime = $dayData['created_at'];
+                        } elseif (!empty($eventsTimeline[0]['down_at'])) {
+                            $firstDownTime = $eventsTimeline[0]['down_at'];
+                        } elseif (!empty($eventsTimeline[0]['created_at'])) {
+                            $firstDownTime = $eventsTimeline[0]['created_at'];
+                        }
+
+                        // Format timestamp nicely if full datetime string is provided
+                        if ($firstDownTime && strtotime($firstDownTime) !== false) {
+                            $firstDownTime = date('H:i:s', strtotime($firstDownTime));
+                        }
 
                         $modalPayload = [
                             'date'          => $formattedDate,
@@ -667,11 +688,13 @@ function openDayDetailModalFromElement(el) {
                     `;
                 });
             } else {
-                const firstOfflineTime = data.first_down_at 
-                    ? `Offline at <strong>${data.first_down_at}</strong> &bull; ` 
-                    : '';
-                const timestampBadge = data.first_down_at 
-                    ? `<span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25"><i class="bi bi-clock me-1"></i> Offline at ${data.first_down_at}</span>`
+                const timeVal = data.first_down_at ? data.first_down_at : null;
+                const timestampBadge = timeVal 
+                    ? `<span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 fs-6 py-1 px-2 mb-2 d-inline-block"><i class="bi bi-clock-fill me-1"></i> Offline at ${timeVal}</span>`
+                    : `<span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 py-1 px-2 mb-2 d-inline-block"><i class="bi bi-clock me-1"></i> Disruption recorded</span>`;
+
+                const timeText = timeVal 
+                    ? `Offline at <strong>${timeVal}</strong> &bull; ` 
                     : '';
 
                 const approxMinutes = Math.max(1, Math.round(data.outages * 0.5));
@@ -681,15 +704,15 @@ function openDayDetailModalFromElement(el) {
 
                 dtHtml = `
                     <div class="mb-2 position-relative">
+                        <div>${timestampBadge}</div>
                         <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
-                            <span class="badge bg-danger"><i class="bi bi-exclamation-triangle-fill me-1"></i> DISRUPTION REGISTERED</span>
-                            ${timestampBadge}
-                            <span class="badge bg-light text-dark border">${data.outages} check hit(s) marked offline</span>
+                            <span class="badge bg-danger py-1 px-2"><i class="bi bi-exclamation-triangle-fill me-1"></i> DISRUPTION REGISTERED</span>
+                            <span class="badge bg-light text-dark border py-1 px-2">${data.outages} check hit(s) marked offline</span>
                         </div>
-                        <div class="small text-dark mb-1 ps-2">
-                            <i class="bi bi-clock-history text-primary me-1"></i> ${firstOfflineTime}Estimated Downtime: <strong>Offline for ${approxDurationText}</strong> (${data.outages} offline checks out of ${data.checks} total)
+                        <div class="small text-dark mb-1 ps-1">
+                            <i class="bi bi-clock-history text-primary me-1"></i> ${timeText}Estimated Downtime: <strong>Offline for ${approxDurationText}</strong> (${data.outages} offline checks out of ${data.checks} total)
                         </div>
-                        <p class="mb-0 text-muted small ps-2">
+                        <p class="mb-0 text-muted small ps-1">
                             Operational recovery completed. Daily service availability maintained at <strong>${data.uptime_pct}%</strong>.
                         </p>
                     </div>
