@@ -4,6 +4,55 @@ $uptimeHistory   = $uptimeHistory ?? [];
 $allIncidents    = $allIncidents ?? [];
 $allMaintenances = $allMaintenances ?? [];
 ?>
+<style>
+    /* 90-Day Column with Event Arrows */
+    .uptime-graph {
+        display: flex;
+        gap: 2px;
+        align-items: stretch;
+        height: 52px; /* Accommodates top arrow (9px), bar (34px), bottom arrow (9px) */
+        padding: 2px 0;
+    }
+    .uptime-day-col {
+        flex: 1 1 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        cursor: pointer;
+    }
+    .uptime-day-col:hover .uptime-bar {
+        filter: brightness(1.15);
+        transform: scaleY(1.08);
+    }
+    .uptime-bar {
+        width: 100%;
+        flex-grow: 1;
+        border-radius: 3px;
+        transition: transform 0.12s ease, opacity 0.12s ease;
+    }
+    /* Event Markers */
+    .uptime-marker-top {
+        height: 9px;
+        line-height: 9px;
+        font-size: 9px;
+        color: #0ea5e9; /* Azure Blue for Maintenances */
+        user-select: none;
+    }
+    .uptime-marker-bottom {
+        height: 9px;
+        line-height: 9px;
+        font-size: 9px;
+        color: #ea580c; /* Dark Orange for Incidents */
+        user-select: none;
+    }
+    .uptime-marker-spacer {
+        height: 9px;
+        visibility: hidden;
+    }
+</style>
+
 <div class="container my-5" style="max-width: 900px;">
     <!-- Feedback Alerts -->
     <?php if (isset($_GET['sub_success'])): ?>
@@ -119,7 +168,7 @@ $allMaintenances = $allMaintenances ?? [];
         <?php endforeach; ?>
     <?php endif; ?>
 
-    <!-- Reusable Monitor Row Function -->
+    <!-- Reusable Monitor Row Function with Arrow Indicators -->
     <?php
     $renderMonitorRow = function(array $monitor) use ($uptimeHistory, $allIncidents, $allMaintenances) {
         $hasChildren = !empty($monitor['children']);
@@ -172,7 +221,7 @@ $allMaintenances = $allMaintenances ?? [];
                 </div>
             </div>
 
-            <!-- 90-Day Interactive Uptime Graph with Click-to-Inspect Modal -->
+            <!-- 90-Day Interactive Uptime Graph with Arrows -->
             <div class="uptime-graph" role="group" aria-label="90 Days Uptime History">
                 <?php
                     for ($day = 89; $day >= 0; $day--):
@@ -187,95 +236,72 @@ $allMaintenances = $allMaintenances ?? [];
                         $blackChecks = (int)($dayData['blackout'] ?? 0);
                         $upChecks    = (int)($dayData['up'] ?? max(0, $totalChecks - $downChecks - $blackChecks));
 
-                        // Daily Uptime Percentage Calculation
                         $dailyUptimePct = ($totalChecks > 0) 
                             ? round(($upChecks / $totalChecks) * 100, 2) 
                             : 100.00;
 
-                        // Check Incident on this day
-                        $matchedIncident = null;
+                        // 1. Collect ALL Incidents on this day (Supports Multiple Incidents!)
+                        $dayIncidents = [];
                         foreach ($allIncidents as $inc) {
                             if (empty($inc['monitor_id']) || (int)$inc['monitor_id'] === $mId) {
                                 $incStart = date('Y-m-d', strtotime($inc['created_at']));
                                 $incEnd   = date('Y-m-d', strtotime($inc['updated_at']));
                                 if ($dayDate >= $incStart && $dayDate <= $incEnd) {
-                                    $matchedIncident = $inc;
-                                    break;
+                                    $dayIncidents[] = $inc;
                                 }
                             }
                         }
 
-                        // Check Maintenance on this day
-                        $matchedMaint = null;
+                        // 2. Collect ALL Maintenances on this day (Supports Multiple Maintenances!)
+                        $dayMaintenances = [];
                         foreach ($allMaintenances as $maint) {
                             if (empty($maint['monitor_id']) || (int)$maint['monitor_id'] === $mId) {
                                 $mStart = date('Y-m-d', strtotime($maint['start_time']));
                                 $mEnd   = date('Y-m-d', strtotime($maint['end_time']));
                                 if ($dayDate >= $mStart && $dayDate <= $mEnd) {
-                                    $matchedMaint = $maint;
-                                    break;
+                                    $dayMaintenances[] = $maint;
                                 }
                             }
                         }
 
-                        // COLORING LOGIC WITH GRADIENT PERCENTAGE
+                        $hasMaintenance = !empty($dayMaintenances);
+                        $hasIncident    = !empty($dayIncidents);
+
+                        // BASE BAR HEALTH COLOR (Preserves Uptime & Gradients!)
                         if ($day === 0 && $isDown) {
                             $barClass = 'uptime-outage';
                             $barStyle = '';
-                            $label = "<strong>{$formattedDate}</strong><br><span style='color: #ef4444;'>●</span> Major Outage (Active Down)";
+                            $statusDesc = "<span style='color: #ef4444;'>●</span> Major Outage (Active Down)";
                         } elseif ($blackChecks > 0) {
                             $barClass = 'uptime-blackout';
                             $barStyle = '';
-                            $label = "<strong>{$formattedDate}</strong><br><span style='color: #0f172a;'>⬛</span> System Blackout ({$dailyUptimePct}% Uptime)";
-                        } elseif ($matchedIncident) {
-                            $barClass = 'uptime-incident';
-                            $barStyle = '';
-                            $label = "<strong>{$formattedDate}</strong><br><span style='color: #f97316;'>●</span> Incident: " . htmlspecialchars($matchedIncident['title']);
-                        } elseif ($matchedMaint) {
-                            $barClass = 'uptime-maintenance';
-                            $barStyle = '';
-                            $label = "<strong>{$formattedDate}</strong><br><span style='color: #0ea5e9;'>●</span> Maintenance: " . htmlspecialchars($matchedMaint['title']);
+                            $statusDesc = "<span style='color: #0f172a;'>⬛</span> System Blackout ({$dailyUptimePct}% Uptime)";
                         } elseif ($downChecks > 0) {
                             $downPct = round(100.0 - $dailyUptimePct, 2);
                             $redVisualPct = max(15, min(100, (int)$downPct));
                             $barClass = 'uptime-partial';
                             $barStyle = "style=\"background: linear-gradient(to top, #ef4444 0%, #ef4444 {$redVisualPct}%, #10b981 {$redVisualPct}%, #10b981 100%);\"";
-                            $label = "<strong>{$formattedDate}</strong><br><span style='color: #ef4444;'>●</span> Downtime: {$downPct}% ({$dailyUptimePct}% Uptime)";
+                            $statusDesc = "<span style='color: #ef4444;'>●</span> Downtime: {$downPct}% ({$dailyUptimePct}% Uptime)";
                         } elseif ($totalChecks > 0) {
                             $barClass = 'uptime-operational';
                             $barStyle = '';
-                            $label = "<strong>{$formattedDate}</strong><br><span style='color: #10b981;'>●</span> 100% Operational";
+                            $statusDesc = "<span style='color: #10b981;'>●</span> 100% Operational";
                         } else {
                             $barClass = 'uptime-operational';
                             $barStyle = '';
-                            $label = "<strong>{$formattedDate}</strong><br><span style='color: #10b981;'>●</span> Operational";
+                            $statusDesc = "<span style='color: #10b981;'>●</span> Operational";
                         }
 
-                        $eventsTimeline = $dayData['events'] ?? [];
-
-                        // Extract first offline timestamp from all possible array key variations
-                        $firstDownTime = null;
-                        if (!empty($dayData['first_down_at'])) {
-                            $firstDownTime = $dayData['first_down_at'];
-                        } elseif (!empty($dayData['first_down_time'])) {
-                            $firstDownTime = $dayData['first_down_time'];
-                        } elseif (!empty($dayData['down_at'])) {
-                            $firstDownTime = $dayData['down_at'];
-                        } elseif (!empty($dayData['first_down'])) {
-                            $firstDownTime = $dayData['first_down'];
-                        } elseif (!empty($dayData['created_at']) && $downChecks > 0) {
-                            $firstDownTime = $dayData['created_at'];
-                        } elseif (!empty($eventsTimeline[0]['down_at'])) {
-                            $firstDownTime = $eventsTimeline[0]['down_at'];
-                        } elseif (!empty($eventsTimeline[0]['created_at'])) {
-                            $firstDownTime = $eventsTimeline[0]['created_at'];
+                        // Build Rich Tooltip Label
+                        $label = "<strong>{$formattedDate}</strong><br>{$statusDesc}";
+                        if ($hasMaintenance) {
+                            $label .= "<br><span style='color: #0ea5e9;'>▼</span> " . count($dayMaintenances) . " Maintenance event(s)";
+                        }
+                        if ($hasIncident) {
+                            $label .= "<br><span style='color: #ea580c;'>▲</span> " . count($dayIncidents) . " Incident(s) reported";
                         }
 
-                        // Format timestamp nicely if full datetime string is provided
-                        if ($firstDownTime && strtotime($firstDownTime) !== false) {
-                            $firstDownTime = date('H:i:s', strtotime($firstDownTime));
-                        }
-
+                        // Payload for the click-to-inspect daily modal (Includes ALL events)
                         $modalPayload = [
                             'date'          => $formattedDate,
                             'monitor'       => $monitor['name'],
@@ -283,37 +309,52 @@ $allMaintenances = $allMaintenances ?? [];
                             'uptime_pct'    => $dailyUptimePct,
                             'blackouts'     => $blackChecks,
                             'outages'       => $downChecks,
-                            'first_down_at' => $firstDownTime,
-                            'events'        => $eventsTimeline,
-                            'incident'      => $matchedIncident ? [
-                                'title'       => $matchedIncident['title'],
-                                'impact'      => strtoupper($matchedIncident['impact']),
-                                'status'      => strtoupper($matchedIncident['status']),
-                                'created_at'  => format_date($matchedIncident['created_at'], 'M d, Y H:i'),
-                                'updated_at'  => format_date($matchedIncident['updated_at'], 'M d, Y H:i'),
+                            'incidents'     => array_map(fn($inc) => [
+                                'title'       => $inc['title'],
+                                'impact'      => strtoupper($inc['impact']),
+                                'status'      => strtoupper($inc['status']),
+                                'created_at'  => format_date($inc['created_at'], 'M d, Y H:i'),
+                                'updated_at'  => format_date($inc['updated_at'], 'M d, Y H:i'),
                                 'updates'     => array_map(fn($u) => [
                                     'status'  => strtoupper($u['status']),
                                     'message' => $u['message'],
                                     'time'    => format_date($u['created_at'], 'M d, H:i')
-                                ], $matchedIncident['updates'] ?? [])
-                            ] : null,
-                            'maintenance'   => $matchedMaint ? [
-                                'title'       => $matchedMaint['title'],
-                                'description' => $matchedMaint['description'] ?? '',
-                                'status'      => strtoupper(str_replace('_', ' ', $matchedMaint['status'])),
-                                'start_time'  => format_date($matchedMaint['start_time'], 'M d, Y H:i'),
-                                'end_time'    => format_date($matchedMaint['end_time'], 'M d, Y H:i T')
-                            ] : null
+                                ], $inc['updates'] ?? [])
+                            ], $dayIncidents),
+                            'maintenances'  => array_map(fn($m) => [
+                                'title'       => $m['title'],
+                                'description' => $m['description'] ?? '',
+                                'status'      => strtoupper(str_replace('_', ' ', $m['status'])),
+                                'start_time'  => format_date($m['start_time'], 'M d, Y H:i'),
+                                'end_time'    => format_date($m['end_time'], 'M d, Y H:i T')
+                            ], $dayMaintenances)
                         ];
                 ?>
-                    <div class="uptime-bar <?= $barClass ?>" 
-                         <?= $barStyle ?>
+                    <div class="uptime-day-col" 
                          data-bs-toggle="tooltip" 
                          data-bs-placement="top" 
                          data-bs-html="true" 
                          title="<?= htmlspecialchars($label, ENT_QUOTES) ?>"
                          data-day-payload='<?= htmlspecialchars(json_encode($modalPayload, JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES, 'UTF-8') ?>'
                          onclick="openDayDetailModalFromElement(this)">
+                        
+                        <!-- Top Arrow: Azure Blue for Scheduled Maintenances -->
+                        <?php if ($hasMaintenance): ?>
+                            <div class="uptime-marker-top" title="<?= count($dayMaintenances) ?> Maintenance(s)">▼</div>
+                        <?php else: ?>
+                            <div class="uptime-marker-spacer">&nbsp;</div>
+                        <?php endif; ?>
+
+                        <!-- Middle Bar: Retains True Uptime Health Color & Gradient -->
+                        <div class="uptime-bar <?= $barClass ?>" <?= $barStyle ?>></div>
+
+                        <!-- Bottom Arrow: Dark Orange for Active/Reported Incidents -->
+                        <?php if ($hasIncident): ?>
+                            <div class="uptime-marker-bottom" title="<?= count($dayIncidents) ?> Incident(s)">▲</div>
+                        <?php else: ?>
+                            <div class="uptime-marker-spacer">&nbsp;</div>
+                        <?php endif; ?>
+
                     </div>
                 <?php endfor; ?>
             </div>
@@ -464,7 +505,7 @@ $allMaintenances = $allMaintenances ?? [];
     <?php endif; ?>
 </div>
 
-<!-- Modal 1: Daily History Inspector (Rich Details with Timestamps & Timeline) -->
+<!-- Modal 1: Daily History Inspector (Supports MULTIPLE Maintenances & Incidents!) -->
 <div class="modal fade" id="dayDetailModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content shadow">
@@ -504,56 +545,18 @@ $allMaintenances = $allMaintenances ?? [];
                     </div>
                 </div>
 
-                <!-- Specific Downtime Timestamps & Disruption Log Box -->
-                <div id="dayModalDowntimeBox" class="d-none card border-danger mb-3 shadow-sm">
-                    <div class="card-header bg-danger bg-opacity-10 text-danger py-2 fw-bold d-flex align-items-center gap-2">
-                        <i class="bi bi-clock-history fs-5"></i>
-                        <span>Disruption Timeline & Specific Downtime Timestamps</span>
-                    </div>
-                    <div class="card-body">
-                        <div class="timeline ps-3 border-start" id="dayModalDowntimeList">
-                            <!-- Populated dynamically via JavaScript -->
-                        </div>
-                    </div>
-                </div>
+                <!-- Multiple Maintenances Container (Azure Blue ▼) -->
+                <div id="dayModalMaintenancesList" class="d-none mb-3"></div>
 
-                <!-- Detailed Incident Box -->
-                <div id="dayModalIncidentBox" class="d-none card border-warning mb-3 shadow-sm">
-                    <div class="card-header bg-warning bg-opacity-25 py-2 d-flex justify-content-between align-items-center">
-                        <span class="fw-bold text-dark"><i class="bi bi-exclamation-triangle-fill text-warning me-1"></i> Reported Incident</span>
-                        <div class="d-flex gap-1" id="dayModalIncBadges"></div>
-                    </div>
-                    <div class="card-body">
-                        <h6 class="fw-bold mb-2 text-dark" id="dayModalIncidentTitle">Title</h6>
-                        <div class="small text-muted mb-3" id="dayModalIncTimestamps"></div>
-                        
-                        <!-- Timeline notes with timestamps -->
-                        <h6 class="fw-bold small text-secondary mb-2">Chronological Updates:</h6>
-                        <div class="timeline ps-3 border-start" id="dayModalIncTimeline"></div>
-                    </div>
-                </div>
-
-                <!-- Detailed Maintenance Box -->
-                <div id="dayModalMaintBox" class="d-none card border-info mb-3 shadow-sm">
-                    <div class="card-header bg-info bg-opacity-25 py-2 d-flex justify-content-between align-items-center">
-                        <span class="fw-bold text-dark"><i class="bi bi-tools text-info me-1"></i> Scheduled Maintenance</span>
-                        <span class="badge bg-info text-dark" id="dayModalMaintStatus">STATUS</span>
-                    </div>
-                    <div class="card-body">
-                        <h6 class="fw-bold mb-2 text-dark" id="dayModalMaintTitle">Title</h6>
-                        <p class="small text-muted mb-2" id="dayModalMaintDesc"></p>
-                        <div class="p-2 bg-light rounded border small text-dark" id="dayModalMaintWindow">
-                            <i class="bi bi-clock me-1 text-primary"></i> <strong>Window:</strong> <span></span>
-                        </div>
-                    </div>
-                </div>
+                <!-- Multiple Incidents Container (Dark Orange ▲) -->
+                <div id="dayModalIncidentsList" class="d-none mb-3"></div>
 
                 <!-- 100% Operational Clean Box -->
                 <div id="dayModalCleanMsg" class="alert alert-success d-flex align-items-center gap-2 mb-0">
                     <i class="bi bi-check-circle-fill fs-3 text-success"></i>
                     <div>
                         <strong>100% Operational</strong>
-                        <div class="small">All systems operated normally with zero disruptions or outages recorded on this day.</div>
+                        <div class="small">All systems operated normally with zero disruptions, incidents, or maintenance recorded on this day.</div>
                     </div>
                 </div>
             </div>
@@ -655,127 +658,90 @@ function openDayDetailModalFromElement(el) {
             uptimeElem.className = 'fw-bold mb-0 text-danger';
         }
 
-        const downtimeBox  = document.getElementById('dayModalDowntimeBox');
-        const downtimeList = document.getElementById('dayModalDowntimeList');
-        const incidentBox  = document.getElementById('dayModalIncidentBox');
-        const maintBox     = document.getElementById('dayModalMaintBox');
-        const cleanMsg     = document.getElementById('dayModalCleanMsg');
+        const maintContainer = document.getElementById('dayModalMaintenancesList');
+        const incContainer   = document.getElementById('dayModalIncidentsList');
+        const cleanMsg       = document.getElementById('dayModalCleanMsg');
 
-        let hasEvent = false;
+        let hasAnyEvent = false;
 
-        // 1. Render Specific Downtime Events with Exact Offline Timestamps & Approximate Duration
-        if (data.outages > 0 || data.blackouts > 0 || (data.events && data.events.length > 0)) {
-            hasEvent = true;
-            let dtHtml = '';
-
-            if (data.events && data.events.length > 0) {
-                data.events.forEach(ev => {
-                    const downTimeStr = ev.down_at ? `Offline at <strong>${ev.down_at}</strong>` : 'Disruption timestamp recorded';
-                    const durationStr = ev.duration || 'approx. 1-2 minutes';
-                    const upTimeStr   = ev.up_at ? `&bull; Restored online at <strong>${ev.up_at}</strong>` : '';
-
-                    dtHtml += `
-                        <div class="mb-3 position-relative pb-2 border-bottom border-light">
-                            <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
-                                <span class="badge bg-danger"><i class="bi bi-x-circle-fill me-1"></i> ${ev.type || 'OFFLINE'}</span>
-                                <span class="text-dark small">${downTimeStr}</span>
-                            </div>
-                            <div class="small text-muted ps-2 d-flex align-items-center gap-2 flex-wrap">
-                                <span><i class="bi bi-clock-history text-primary me-1"></i> Duration: <strong class="text-dark">${durationStr}</strong></span>
-                                ${upTimeStr ? `<span class="text-success"><i class="bi bi-check-circle-fill me-1"></i> ${upTimeStr}</span>` : ''}
+        // 1. Render ALL Maintenances on this Day (Supports Multiple Maintenances)
+        if (data.maintenances && data.maintenances.length > 0) {
+            hasAnyEvent = true;
+            let maintHtml = '';
+            data.maintenances.forEach(m => {
+                maintHtml += `
+                    <div class="card border-info mb-3 shadow-sm">
+                        <div class="card-header bg-info bg-opacity-25 py-2 d-flex justify-content-between align-items-center">
+                            <span class="fw-bold text-dark"><i class="bi bi-tools text-info me-1"></i> Scheduled Maintenance</span>
+                            <span class="badge bg-info text-dark">${m.status}</span>
+                        </div>
+                        <div class="card-body">
+                            <h6 class="fw-bold mb-2 text-dark">${m.title}</h6>
+                            <p class="small text-muted mb-2">${m.description || 'No description provided.'}</p>
+                            <div class="p-2 bg-light rounded border small text-dark">
+                                <i class="bi bi-clock me-1 text-primary"></i> <strong>Window:</strong> ${m.start_time} — ${m.end_time}
                             </div>
                         </div>
-                    `;
-                });
-            } else {
-                const timeVal = data.first_down_at ? data.first_down_at : null;
-                const timestampBadge = timeVal 
-                    ? `<span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 fs-6 py-1 px-2 mb-2 d-inline-block"><i class="bi bi-clock-fill me-1"></i> Offline at ${timeVal}</span>`
-                    : `<span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 py-1 px-2 mb-2 d-inline-block"><i class="bi bi-clock me-1"></i> Disruption recorded</span>`;
-
-                const timeText = timeVal 
-                    ? `Offline at <strong>${timeVal}</strong> &bull; ` 
-                    : '';
-
-                const approxMinutes = Math.max(1, Math.round(data.outages * 0.5));
-                const approxDurationText = approxMinutes === 1 
-                    ? '1 minute' 
-                    : (approxMinutes < 60 ? `~${approxMinutes} minutes` : `~${(approxMinutes/60).toFixed(1)} hours`);
-
-                dtHtml = `
-                    <div class="mb-2 position-relative">
-                        <div>${timestampBadge}</div>
-                        <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
-                            <span class="badge bg-danger py-1 px-2"><i class="bi bi-exclamation-triangle-fill me-1"></i> DISRUPTION REGISTERED</span>
-                            <span class="badge bg-light text-dark border py-1 px-2">${data.outages} check hit(s) marked offline</span>
-                        </div>
-                        <div class="small text-dark mb-1 ps-1">
-                            <i class="bi bi-clock-history text-primary me-1"></i> ${timeText}Estimated Downtime: <strong>Offline for ${approxDurationText}</strong> (${data.outages} offline checks out of ${data.checks} total)
-                        </div>
-                        <p class="mb-0 text-muted small ps-1">
-                            Operational recovery completed. Daily service availability maintained at <strong>${data.uptime_pct}%</strong>.
-                        </p>
                     </div>
                 `;
-            }
-
-            downtimeList.innerHTML = dtHtml;
-            downtimeBox.classList.remove('d-none');
+            });
+            maintContainer.innerHTML = maintHtml;
+            maintContainer.classList.remove('d-none');
         } else {
-            downtimeBox.classList.add('d-none');
+            maintContainer.innerHTML = '';
+            maintContainer.classList.add('d-none');
         }
 
-        // 2. Render Incident with Timestamps and Updates Timeline
-        if (data.incident) {
-            hasEvent = true;
-            document.getElementById('dayModalIncidentTitle').textContent = data.incident.title;
-            
-            document.getElementById('dayModalIncBadges').innerHTML = `
-                <span class="badge bg-danger">${data.incident.impact}</span>
-                <span class="badge bg-dark">${data.incident.status}</span>
-            `;
+        // 2. Render ALL Incidents on this Day (Supports Multiple Incidents)
+        if (data.incidents && data.incidents.length > 0) {
+            hasAnyEvent = true;
+            let incHtml = '';
+            data.incidents.forEach(inc => {
+                let timelineHtml = '';
+                if (inc.updates && inc.updates.length > 0) {
+                    inc.updates.forEach(u => {
+                        timelineHtml += `
+                            <div class="mb-2 position-relative">
+                                <span class="badge bg-secondary me-1">${u.time}</span>
+                                <strong class="small text-dark text-capitalize">${u.status}:</strong>
+                                <p class="mb-0 text-muted small ps-2">${u.message}</p>
+                            </div>
+                        `;
+                    });
+                } else {
+                    timelineHtml = '<small class="text-muted">No timeline notes posted.</small>';
+                }
 
-            document.getElementById('dayModalIncTimestamps').innerHTML = `
-                <i class="bi bi-calendar-event me-1"></i> <strong>Opened:</strong> ${data.incident.created_at} &bull; 
-                <i class="bi bi-clock-history me-1"></i> <strong>Updated:</strong> ${data.incident.updated_at}
-            `;
-
-            let timelineHtml = '';
-            if (data.incident.updates && data.incident.updates.length > 0) {
-                data.incident.updates.forEach(u => {
-                    timelineHtml += `
-                        <div class="mb-2 position-relative">
-                            <span class="badge bg-secondary me-1">${u.time}</span>
-                            <strong class="small text-dark text-capitalize">${u.status}:</strong>
-                            <p class="mb-0 text-muted small ps-2">${u.message}</p>
+                incHtml += `
+                    <div class="card border-warning mb-3 shadow-sm">
+                        <div class="card-header bg-warning bg-opacity-25 py-2 d-flex justify-content-between align-items-center">
+                            <span class="fw-bold text-dark"><i class="bi bi-exclamation-triangle-fill text-warning me-1"></i> Reported Incident</span>
+                            <div class="d-flex gap-1">
+                                <span class="badge bg-danger">${inc.impact}</span>
+                                <span class="badge bg-dark">${inc.status}</span>
+                            </div>
                         </div>
-                    `;
-                });
-            } else {
-                timelineHtml = '<small class="text-muted">No timeline notes posted.</small>';
-            }
-            document.getElementById('dayModalIncTimeline').innerHTML = timelineHtml;
-
-            incidentBox.classList.remove('d-none');
+                        <div class="card-body">
+                            <h6 class="fw-bold mb-2 text-dark">${inc.title}</h6>
+                            <div class="small text-muted mb-3">
+                                <i class="bi bi-calendar-event me-1"></i> <strong>Opened:</strong> ${inc.created_at} &bull; 
+                                <i class="bi bi-clock-history me-1"></i> <strong>Updated:</strong> ${inc.updated_at}
+                            </div>
+                            <h6 class="fw-bold small text-secondary mb-2">Chronological Updates:</h6>
+                            <div class="timeline ps-3 border-start">${timelineHtml}</div>
+                        </div>
+                    </div>
+                `;
+            });
+            incContainer.innerHTML = incHtml;
+            incContainer.classList.remove('d-none');
         } else {
-            incidentBox.classList.add('d-none');
+            incContainer.innerHTML = '';
+            incContainer.classList.add('d-none');
         }
 
-        // 3. Render Maintenance with Time Windows
-        if (data.maintenance) {
-            hasEvent = true;
-            document.getElementById('dayModalMaintTitle').textContent = data.maintenance.title;
-            document.getElementById('dayModalMaintDesc').textContent = data.maintenance.description || 'No description provided.';
-            document.getElementById('dayModalMaintStatus').textContent = data.maintenance.status;
-            document.querySelector('#dayModalMaintWindow span').textContent = `${data.maintenance.start_time} — ${data.maintenance.end_time}`;
-
-            maintBox.classList.remove('d-none');
-        } else {
-            maintBox.classList.add('d-none');
-        }
-
-        // 4. Show clean 100% operational message if no events occurred
-        if (hasEvent || data.outages > 0 || data.blackouts > 0) {
+        // 3. Show clean 100% operational message if no events occurred
+        if (hasAnyEvent || data.outages > 0 || data.blackouts > 0) {
             cleanMsg.classList.add('d-none');
         } else {
             cleanMsg.classList.remove('d-none');
