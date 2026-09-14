@@ -122,13 +122,25 @@ class StatusPageController
             ];
         }
 
-        // 7. Map 90-Day Incidents and Maintenances per Monitor and Date
+        // 7. Map 90-Day Incidents (WITH timeline notes) and Maintenances per Monitor and Date
         $incStmt = $this->db->query("
             SELECT id, monitor_id, title, impact, status, created_at, updated_at 
             FROM incidents 
             WHERE created_at >= DATE_SUB(NOW(), INTERVAL 90 DAY) OR status != 'resolved'
         ");
         $allIncidents = $incStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        foreach ($allIncidents as &$inc) {
+            $upStmt = $this->db->prepare("
+                SELECT status, message, created_at 
+                FROM incident_updates 
+                WHERE incident_id = ? 
+                ORDER BY created_at ASC
+            ");
+            $upStmt->execute([$inc['id']]);
+            $inc['updates'] = $upStmt->fetchAll(PDO::FETCH_ASSOC);
+        }
+        unset($inc);
 
         $maintStmt = $this->db->query("
             SELECT id, monitor_id, title, description, status, start_time, end_time 
