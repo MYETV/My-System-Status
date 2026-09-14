@@ -24,7 +24,6 @@ class ExternalStatusPlugin
     {
         $this->forceInsert = $forceInsert;
 
-        // 0. Auto-cleanup: remove historical duplicates
         $this->db->exec("
             DELETE m1 FROM monitors m1 
             INNER JOIN monitors m2 ON m1.target = m2.target 
@@ -33,45 +32,39 @@ class ExternalStatusPlugin
 
         $results = [];
 
-        // 1. Cloudflare Public Services
         if (setting('feed_cloudflare_enabled', '1') === '1') {
             $results['cloudflare'] = $this->syncCloudflare();
         } else {
             $this->disableFeedMonitors('https://www.cloudflarestatus.com');
         }
 
-        // 2. Custom Cloudflare Zero Trust Tunnel
+        // Custom Cloudflare Zero Trust Tunnel
         $this->syncCustomCloudflareTunnel($forceInsert);
 
-        // 3. Amazon AWS
         if (setting('feed_aws_enabled', '1') === '1') {
             $results['aws'] = $this->syncAws();
         } else {
             $this->disableFeedMonitors('https://health.aws.amazon.com');
         }
 
-        // 4. Microsoft Azure
         if (setting('feed_azure_enabled', '1') === '1') {
             $results['azure'] = $this->syncAzure();
         } else {
             $this->disableFeedMonitors('https://azure.status.microsoft');
         }
 
-        // 5. Stripe
         if (setting('feed_stripe_enabled', '1') === '1') {
             $results['stripe'] = $this->syncStripe();
         } else {
             $this->disableFeedMonitors('https://status.stripe.com');
         }
 
-        // 6. PayPal
         if (setting('feed_paypal_enabled', '1') === '1') {
             $results['paypal'] = $this->syncPayPal();
         } else {
             $this->disableFeedMonitors('https://www.paypal-status.com');
         }
 
-        // 7. GitHub
         if (setting('feed_github_enabled', '1') === '1') {
             $results['github'] = $this->syncGitHub();
         } else {
@@ -82,7 +75,7 @@ class ExternalStatusPlugin
     }
 
     /**
-     * Check individual Cloudflare Zero Trust Tunnel health via Cloudflare API v4
+     * Check Cloudflare Zero Trust Tunnel health with fallback listing
      */
     public function syncCustomCloudflareTunnel(bool $forceInsert = false): void
     {
@@ -102,10 +95,9 @@ class ExternalStatusPlugin
         $isPrimary   = (setting('cf_tunnel_is_primary', '1') === '1') ? 1 : 0;
         $targetUrl   = "https://dash.cloudflare.com/{$accountId}/networks/tunnels/{$tunnelId}";
 
-        // If marked as Primary, parent_id is NULL so it appears in Core Infrastructure
         $parentId = $isPrimary ? null : $this->getCloudflareParentId();
 
-        // Try standard Cloudflare v4 Tunnel endpoints
+        // 1. Try direct tunnel endpoints
         $endpoints = [
             "https://api.cloudflare.com/client/v4/accounts/{$accountId}/cfd_tunnel/{$tunnelId}",
             "https://api.cloudflare.com/client/v4/accounts/{$accountId}/tunnels/{$tunnelId}"
@@ -135,23 +127,57 @@ class ExternalStatusPlugin
             }
         }
 
+        // 2. Fallback: List all active tunnels if direct match failed (e.g. Connector ID used)
+        if (!$tunnelData) {
+            $listUrl = "https://api.cloudflare.com/client/v4/accounts/{$accountId}/cfd_tunnel?is_deleted=false";
+            $ch = curl_init($listUrl);
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT        => 8,
+                CURLOPT_HTTPHEADER     => [
+                    "Authorization: Bearer {$apiToken}",
+                    "Content-Type: application/json"
+                ]
+            ]);
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            if ($httpCode === 200 && $response) {
+                $json = json_decode($response, true);
+                if (!empty($json['success']) && !empty($json['result']) && is_array($json['result'])) {
+                    foreach ($json['result'] as $t) {
+                        if (
+                            strcasecmp($t['id'] ?? '', $tunnelId) === 0 ||
+                            strcasecmp($t['name'] ?? '', $tunnelId) === 0
+                        ) {
+                            $tunnelData = $t;
+                            break;
+                        }
+                    }
+                    // Fallback to single active tunnel if available
+                    if (!$tunnelData && count($json['result']) === 1) {
+                        $tunnelData = $json['result'][0];
+                    }
+                }
+            }
+        }
+
         if ($tunnelData) {
             $rawStatus = strtolower($tunnelData['status'] ?? 'down');
             $status = match ($rawStatus) {
-                'healthy', 'active' => 'operational',
-                'degraded'          => 'degraded',
-                default             => 'down'
+                'healthy', 'active', 'operational' => 'operational',
+                'degraded'                         => 'degraded',
+                default                            => 'down'
             };
 
             if (!empty($tunnelData['name']) && empty(setting('cf_tunnel_name'))) {
                 $customLabel = $tunnelData['name'];
             }
         } else {
-            // Unreachable or invalid API token / 404 response
             $status = 'down';
         }
 
-        // Always upsert monitor (creates new monitor when saving settings, or updates existing status)
         $this->upsertMonitor("Tunnel: {$customLabel}", $targetUrl, $status, $parentId, $isPrimary);
     }
 
@@ -173,9 +199,9 @@ class ExternalStatusPlugin
         $overallIndicator = $data['status']['indicator'] ?? 'none';
 
         $parentStatus = match ($overallIndicator) {
-            'none'     => 'operational',
-            'minor'    => 'degraded',
-            default    => 'down'
+            'none'  => 'operational',
+            'minor' => 'degraded',
+            default => 'down'
         };
 
         $parentId = $this->upsertMonitor('Cloudflare Global Network', 'https://www.cloudflarestatus.com', $parentStatus, null, 0);
@@ -298,9 +324,6 @@ class ExternalStatusPlugin
         return $status;
     }
 
-    /**
-     * Insert new probe if forceInsert is true, or update if monitor already exists.
-     */
     private function upsertMonitor(string $name, string $target, string $status, ?int $parentId, int $isPrimary = 0): int
     {
         $stmt = $this->db->prepare("SELECT id, is_active FROM monitors WHERE target = ? LIMIT 1");
@@ -319,7 +342,6 @@ class ExternalStatusPlugin
             return (int)$existing['id'];
         }
 
-        // Insert new probe only if sync was explicitly triggered from Admin UI
         if ($this->forceInsert) {
             $insert = $this->db->prepare("
                 INSERT INTO monitors (name, type, target, parent_id, sort_order, is_primary, current_status, last_check, is_active) 
