@@ -182,7 +182,17 @@ $allMaintenances = $allMaintenances ?? [];
 
                         $dayData = $uptimeHistory[$mId][$dayDate] ?? null;
 
-                        // Check if an Incident occurred on this day for this monitor (or global)
+                        $totalChecks = (int)($dayData['total'] ?? 0);
+                        $downChecks  = (int)($dayData['down'] ?? 0);
+                        $blackChecks = (int)($dayData['blackout'] ?? 0);
+                        $upChecks    = (int)($dayData['up'] ?? max(0, $totalChecks - $downChecks - $blackChecks));
+
+                        // Daily Uptime Percentage Calculation
+                        $dailyUptimePct = ($totalChecks > 0) 
+                            ? round(($upChecks / $totalChecks) * 100, 2) 
+                            : 100.00;
+
+                        // Check Incident on this day
                         $matchedIncident = null;
                         foreach ($allIncidents as $inc) {
                             if (empty($inc['monitor_id']) || (int)$inc['monitor_id'] === $mId) {
@@ -195,7 +205,7 @@ $allMaintenances = $allMaintenances ?? [];
                             }
                         }
 
-                        // Check if a Maintenance occurred on this day for this monitor (or global)
+                        // Check Maintenance on this day
                         $matchedMaint = null;
                         foreach ($allMaintenances as $maint) {
                             if (empty($maint['monitor_id']) || (int)$maint['monitor_id'] === $mId) {
@@ -208,41 +218,53 @@ $allMaintenances = $allMaintenances ?? [];
                             }
                         }
 
-                        // PRIORITY HIERARCHY: Blackout > Outage > Incident > Maintenance > Degraded > Operational
+                        // COLORING LOGIC WITH GRADIENT PERCENTAGE
                         if ($day === 0 && $isDown) {
                             $barClass = 'uptime-outage';
-                            $label = "<strong>{$formattedDate}</strong><br><span style='color: #ef4444;'>●</span> Major Outage";
-                        } elseif ($dayData && $dayData['blackout'] > 0) {
+                            $barStyle = '';
+                            $label = "<strong>{$formattedDate}</strong><br><span style='color: #ef4444;'>●</span> Major Outage (Active Down)";
+                        } elseif ($blackChecks > 0) {
                             $barClass = 'uptime-blackout';
-                            $label = "<strong>{$formattedDate}</strong><br><span style='color: #0f172a;'>⬛</span> System Blackout (Machine Offline)";
-                        } elseif ($dayData && $dayData['down'] > 0) {
-                            $barClass = 'uptime-outage';
-                            $label = "<strong>{$formattedDate}</strong><br><span style='color: #ef4444;'>●</span> Outage Detected";
+                            $barStyle = '';
+                            $label = "<strong>{$formattedDate}</strong><br><span style='color: #0f172a;'>⬛</span> System Blackout ({$dailyUptimePct}% Uptime)";
                         } elseif ($matchedIncident) {
                             $barClass = 'uptime-incident';
+                            $barStyle = '';
                             $label = "<strong>{$formattedDate}</strong><br><span style='color: #f97316;'>●</span> Incident: " . htmlspecialchars($matchedIncident['title']);
                         } elseif ($matchedMaint) {
                             $barClass = 'uptime-maintenance';
+                            $barStyle = '';
                             $label = "<strong>{$formattedDate}</strong><br><span style='color: #0ea5e9;'>●</span> Maintenance: " . htmlspecialchars($matchedMaint['title']);
-                        } elseif ($dayData && $dayData['up'] < $dayData['total']) {
-                            $barClass = 'uptime-degraded';
-                            $label = "<strong>{$formattedDate}</strong><br><span style='color: #f59e0b;'>●</span> Performance Degraded";
-                        } elseif ($dayData && $dayData['total'] > 0) {
+                        } elseif ($downChecks > 0) {
+                            $downPct = round(100.0 - $dailyUptimePct, 2);
+                            $redVisualPct = max(15, min(100, (int)$downPct));
+                            $barClass = 'uptime-partial';
+                            $barStyle = "style=\"background: linear-gradient(to top, #ef4444 0%, #ef4444 {$redVisualPct}%, #10b981 {$redVisualPct}%, #10b981 100%);\"";
+                            $label = "<strong>{$formattedDate}</strong><br><span style='color: #ef4444;'>●</span> Downtime: {$downPct}% ({$dailyUptimePct}% Uptime)";
+                        } elseif ($totalChecks > 0) {
                             $barClass = 'uptime-operational';
+                            $barStyle = '';
                             $label = "<strong>{$formattedDate}</strong><br><span style='color: #10b981;'>●</span> 100% Operational";
                         } else {
                             $barClass = 'uptime-operational';
+                            $barStyle = '';
                             $label = "<strong>{$formattedDate}</strong><br><span style='color: #10b981;'>●</span> Operational";
                         }
 
-                        // Prepare Rich Payload with Timestamps and Updates Timeline
+                        // Detailed Events Timestamps Timeline Payload
+                        $eventsTimeline = $dayData['events'] ?? [];
+                        $firstDownTime  = $dayData['first_down_at'] ?? ($eventsTimeline[0]['down_at'] ?? ($dayData['down_at'] ?? null));
+
                         $modalPayload = [
-                            'date'        => $formattedDate,
-                            'monitor'     => $monitor['name'],
-                            'checks'      => $dayData['total'] ?? 0,
-                            'blackouts'   => $dayData['blackout'] ?? 0,
-                            'outages'     => $dayData['down'] ?? 0,
-                            'incident'    => $matchedIncident ? [
+                            'date'          => $formattedDate,
+                            'monitor'       => $monitor['name'],
+                            'checks'        => $totalChecks,
+                            'uptime_pct'    => $dailyUptimePct,
+                            'blackouts'     => $blackChecks,
+                            'outages'       => $downChecks,
+                            'first_down_at' => $firstDownTime,
+                            'events'        => $eventsTimeline,
+                            'incident'      => $matchedIncident ? [
                                 'title'       => $matchedIncident['title'],
                                 'impact'      => strtoupper($matchedIncident['impact']),
                                 'status'      => strtoupper($matchedIncident['status']),
@@ -254,7 +276,7 @@ $allMaintenances = $allMaintenances ?? [];
                                     'time'    => format_date($u['created_at'], 'M d, H:i')
                                 ], $matchedIncident['updates'] ?? [])
                             ] : null,
-                            'maintenance' => $matchedMaint ? [
+                            'maintenance'   => $matchedMaint ? [
                                 'title'       => $matchedMaint['title'],
                                 'description' => $matchedMaint['description'] ?? '',
                                 'status'      => strtoupper(str_replace('_', ' ', $matchedMaint['status'])),
@@ -264,6 +286,7 @@ $allMaintenances = $allMaintenances ?? [];
                         ];
                 ?>
                     <div class="uptime-bar <?= $barClass ?>" 
+                         <?= $barStyle ?>
                          data-bs-toggle="tooltip" 
                          data-bs-placement="top" 
                          data-bs-html="true" 
@@ -314,19 +337,29 @@ $allMaintenances = $allMaintenances ?? [];
 
                                             if ($cDay === 0 && $childDown) {
                                                 $cClass = 'uptime-outage';
+                                                $cStyle = '';
                                                 $cLabel = "<strong>{$cDate}</strong><br><span style='color: #ef4444;'>●</span> Outage";
-                                            } elseif ($cData && $cData['blackout'] > 0) {
+                                            } elseif ($cData && ($cData['blackout'] ?? 0) > 0) {
                                                 $cClass = 'uptime-blackout';
+                                                $cStyle = '';
                                                 $cLabel = "<strong>{$cDate}</strong><br><span style='color: #0f172a;'>⬛</span> Blackout";
-                                            } elseif ($cData && $cData['down'] > 0) {
-                                                $cClass = 'uptime-outage';
-                                                $cLabel = "<strong>{$cDate}</strong><br><span style='color: #ef4444;'>●</span> Outage";
+                                            } elseif ($cData && ($cData['down'] ?? 0) > 0) {
+                                                $cTotal = (int)($cData['total'] ?? 0);
+                                                $cDown  = (int)($cData['down'] ?? 0);
+                                                $cUpPct = $cTotal > 0 ? round((($cTotal - $cDown) / $cTotal) * 100, 2) : 95.0;
+                                                $cDownPct = round(100.0 - $cUpPct, 2);
+                                                $cRedPct  = max(15, min(100, (int)$cDownPct));
+                                                $cClass = 'uptime-partial';
+                                                $cStyle = "style=\"background: linear-gradient(to top, #ef4444 0%, #ef4444 {$cRedPct}%, #10b981 {$cRedPct}%, #10b981 100%);\"";
+                                                $cLabel = "<strong>{$cDate}</strong><br><span style='color: #ef4444;'>●</span> Partial Outage ({$cUpPct}% Uptime)";
                                             } else {
                                                 $cClass = 'uptime-operational';
+                                                $cStyle = '';
                                                 $cLabel = "<strong>{$cDate}</strong><br><span style='color: #10b981;'>●</span> Operational";
                                             }
                                     ?>
                                         <div class="uptime-bar <?= $cClass ?>" 
+                                             <?= $cStyle ?>
                                              data-bs-toggle="tooltip" 
                                              data-bs-placement="top" 
                                              data-bs-html="true" 
@@ -424,22 +457,41 @@ $allMaintenances = $allMaintenances ?? [];
             <div class="modal-body p-4">
                 <!-- Checks Counters Row -->
                 <div class="row g-2 mb-4 text-center">
-                    <div class="col-4">
+                    <div class="col-3">
+                        <div class="p-2 bg-light rounded border">
+                            <div class="small text-muted">Daily Uptime</div>
+                            <h5 class="fw-bold mb-0 text-success" id="dayModalUptimePct">100%</h5>
+                        </div>
+                    </div>
+                    <div class="col-3">
                         <div class="p-2 bg-light rounded border">
                             <div class="small text-muted">Checks Executed</div>
                             <h5 class="fw-bold mb-0 text-dark" id="dayModalChecksCount">0</h5>
                         </div>
                     </div>
-                    <div class="col-4">
+                    <div class="col-3">
                         <div class="p-2 bg-light rounded border">
                             <div class="small text-muted">Downtime Hits</div>
                             <h5 class="fw-bold mb-0 text-danger" id="dayModalOutagesCount">0</h5>
                         </div>
                     </div>
-                    <div class="col-4">
+                    <div class="col-3">
                         <div class="p-2 bg-light rounded border">
                             <div class="small text-muted">System Blackouts</div>
                             <h5 class="fw-bold mb-0 text-dark" id="dayModalBlackoutsCount">0</h5>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Specific Downtime Timestamps & Disruption Log Box -->
+                <div id="dayModalDowntimeBox" class="d-none card border-danger mb-3 shadow-sm">
+                    <div class="card-header bg-danger bg-opacity-10 text-danger py-2 fw-bold d-flex align-items-center gap-2">
+                        <i class="bi bi-clock-history fs-5"></i>
+                        <span>Disruption Timeline & Specific Downtime Timestamps</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="timeline ps-3 border-start" id="dayModalDowntimeList">
+                            <!-- Populated dynamically via JavaScript -->
                         </div>
                     </div>
                 </div>
@@ -480,7 +532,7 @@ $allMaintenances = $allMaintenances ?? [];
                     <i class="bi bi-check-circle-fill fs-3 text-success"></i>
                     <div>
                         <strong>100% Operational</strong>
-                        <div class="small">All systems operated normally with zero disruptions or incidents reported on this day.</div>
+                        <div class="small">All systems operated normally with zero disruptions or outages recorded on this day.</div>
                     </div>
                 </div>
             </div>
@@ -572,13 +624,85 @@ function openDayDetailModalFromElement(el) {
         document.getElementById('dayModalOutagesCount').textContent = data.outages;
         document.getElementById('dayModalBlackoutsCount').textContent = data.blackouts;
 
-        const incidentBox = document.getElementById('dayModalIncidentBox');
-        const maintBox = document.getElementById('dayModalMaintBox');
-        const cleanMsg = document.getElementById('dayModalCleanMsg');
+        const uptimeElem = document.getElementById('dayModalUptimePct');
+        uptimeElem.textContent = data.uptime_pct + '%';
+        if (data.uptime_pct >= 99.0) {
+            uptimeElem.className = 'fw-bold mb-0 text-success';
+        } else if (data.uptime_pct >= 90.0) {
+            uptimeElem.className = 'fw-bold mb-0 text-warning';
+        } else {
+            uptimeElem.className = 'fw-bold mb-0 text-danger';
+        }
+
+        const downtimeBox  = document.getElementById('dayModalDowntimeBox');
+        const downtimeList = document.getElementById('dayModalDowntimeList');
+        const incidentBox  = document.getElementById('dayModalIncidentBox');
+        const maintBox     = document.getElementById('dayModalMaintBox');
+        const cleanMsg     = document.getElementById('dayModalCleanMsg');
 
         let hasEvent = false;
 
-        // 1. Render Incident with Exact Timestamps and Updates Timeline
+        // 1. Render Specific Downtime Events with Exact Offline Timestamps & Approximate Duration
+        if (data.outages > 0 || data.blackouts > 0 || (data.events && data.events.length > 0)) {
+            hasEvent = true;
+            let dtHtml = '';
+
+            if (data.events && data.events.length > 0) {
+                data.events.forEach(ev => {
+                    const downTimeStr = ev.down_at ? `Offline at <strong>${ev.down_at}</strong>` : 'Disruption timestamp recorded';
+                    const durationStr = ev.duration || 'approx. 1-2 minutes';
+                    const upTimeStr   = ev.up_at ? `&bull; Restored online at <strong>${ev.up_at}</strong>` : '';
+
+                    dtHtml += `
+                        <div class="mb-3 position-relative pb-2 border-bottom border-light">
+                            <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
+                                <span class="badge bg-danger"><i class="bi bi-x-circle-fill me-1"></i> ${ev.type || 'OFFLINE'}</span>
+                                <span class="text-dark small">${downTimeStr}</span>
+                            </div>
+                            <div class="small text-muted ps-2 d-flex align-items-center gap-2 flex-wrap">
+                                <span><i class="bi bi-clock-history text-primary me-1"></i> Duration: <strong class="text-dark">${durationStr}</strong></span>
+                                ${upTimeStr ? `<span class="text-success"><i class="bi bi-check-circle-fill me-1"></i> ${upTimeStr}</span>` : ''}
+                            </div>
+                        </div>
+                    `;
+                });
+            } else {
+                const firstOfflineTime = data.first_down_at 
+                    ? `Offline at <strong>${data.first_down_at}</strong> &bull; ` 
+                    : '';
+                const timestampBadge = data.first_down_at 
+                    ? `<span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25"><i class="bi bi-clock me-1"></i> Offline at ${data.first_down_at}</span>`
+                    : '';
+
+                const approxMinutes = Math.max(1, Math.round(data.outages * 0.5));
+                const approxDurationText = approxMinutes === 1 
+                    ? '1 minute' 
+                    : (approxMinutes < 60 ? `~${approxMinutes} minutes` : `~${(approxMinutes/60).toFixed(1)} hours`);
+
+                dtHtml = `
+                    <div class="mb-2 position-relative">
+                        <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
+                            <span class="badge bg-danger"><i class="bi bi-exclamation-triangle-fill me-1"></i> DISRUPTION REGISTERED</span>
+                            ${timestampBadge}
+                            <span class="badge bg-light text-dark border">${data.outages} check hit(s) marked offline</span>
+                        </div>
+                        <div class="small text-dark mb-1 ps-2">
+                            <i class="bi bi-clock-history text-primary me-1"></i> ${firstOfflineTime}Estimated Downtime: <strong>Offline for ${approxDurationText}</strong> (${data.outages} offline checks out of ${data.checks} total)
+                        </div>
+                        <p class="mb-0 text-muted small ps-2">
+                            Operational recovery completed. Daily service availability maintained at <strong>${data.uptime_pct}%</strong>.
+                        </p>
+                    </div>
+                `;
+            }
+
+            downtimeList.innerHTML = dtHtml;
+            downtimeBox.classList.remove('d-none');
+        } else {
+            downtimeBox.classList.add('d-none');
+        }
+
+        // 2. Render Incident with Timestamps and Updates Timeline
         if (data.incident) {
             hasEvent = true;
             document.getElementById('dayModalIncidentTitle').textContent = data.incident.title;
@@ -614,7 +738,7 @@ function openDayDetailModalFromElement(el) {
             incidentBox.classList.add('d-none');
         }
 
-        // 2. Render Maintenance with Exact Time Windows
+        // 3. Render Maintenance with Time Windows
         if (data.maintenance) {
             hasEvent = true;
             document.getElementById('dayModalMaintTitle').textContent = data.maintenance.title;
@@ -627,7 +751,7 @@ function openDayDetailModalFromElement(el) {
             maintBox.classList.add('d-none');
         }
 
-        // 3. Show clean 100% operational message if no events occurred
+        // 4. Show clean 100% operational message if no events occurred
         if (hasEvent || data.outages > 0 || data.blackouts > 0) {
             cleanMsg.classList.add('d-none');
         } else {
