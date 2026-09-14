@@ -20,13 +20,22 @@ class MonitorService
      */
     public function runPendingChecks(): void
     {
-        // 1. Retroactive Blackout / Gap Detection (When server wakes up after being turned off)
+        // 1. Retroactive Blackout / Gap Detection
         $this->detectAndBackfillBlackouts();
 
-        // 2. Fetch monitors due for execution
+        // 2. Fetch only custom user routes (Exclude external feeds and Cloudflare dashboard/tunnels)
         $stmt = $this->db->prepare("
             SELECT * FROM monitors 
             WHERE is_active = 1 
+            AND target NOT LIKE 'https://www.cloudflarestatus.com%'
+            AND target NOT LIKE 'https://status.aws.amazon.com%'
+            AND target NOT LIKE 'https://health.aws.amazon.com%'
+            AND target NOT LIKE 'https://azure.status.microsoft%'
+            AND target NOT LIKE 'https://status.stripe.com%'
+            AND target NOT LIKE 'https://www.paypal-status.com%'
+            AND target NOT LIKE 'https://www.githubstatus.com%'
+            AND target NOT LIKE 'https://dash.cloudflare.com%'
+            AND name NOT LIKE 'Tunnel:%'
             AND (last_check IS NULL OR TIMESTAMPADD(SECOND, interval_seconds, last_check) <= NOW())
         ");
         $stmt->execute();
