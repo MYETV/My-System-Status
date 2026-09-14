@@ -13,6 +13,7 @@ $navItems = [
     ['uri' => '/admin/plugins',     'icon' => 'bi-puzzle',             'label' => __('nav.plugins')],
     ['uri' => '/admin/logs',        'icon' => 'bi-journal-text',       'label' => __('nav.logs')],
     ['uri' => '/admin/settings',    'icon' => 'bi-gear',               'label' => __('nav.settings')],
+    ['uri' => '/admin/api-keys', 'icon' => 'bi-key', 'label' => 'API Keys'],
     ['uri' => '/admin/updater',     'icon' => 'bi-arrow-repeat',       'label' => __('nav.updates')]
 ];
 ?>
