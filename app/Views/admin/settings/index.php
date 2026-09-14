@@ -344,7 +344,7 @@ $allTimezones    = DateService::getTimezonesList();
                     <strong>Get the template code:</strong> Open the local file <code>edge/cloudflare-worker.js</code> in your repository.
                 </li>
                 <li class="mb-1">
-                    <strong>Create the Worker:</strong> In <a href="https://dash.cloudflare.com" target="_blank" class="text-primary fw-semibold">Cloudflare Dashboard</a> &rarr; <em>Workers & Pages</em> &rarr; <em>Create Application</em> &rarr; <em>Create Worker</em>, and paste the code from <code>edge/cloudflare-worker.js</code>.
+                    <strong>Create the Worker:</strong> In <a href="https://dash.cloudflare.com" target="_blank" class="text-primary fw-semibold">Cloudflare Dashboard</a> &rarr; <em>Workers & Pages</em> &rarr; <em>Create Application</em> &rarr; <em>Create Worker</em>, and paste the code from <code>edge/cloudflare-worker-ping.js</code>.
                 </li>
                 <li class="mb-1">
                     <strong>Configure Variables (Worker Settings &rarr; Variables):</strong>
@@ -352,7 +352,6 @@ $allTimezones    = DateService::getTimezonesList();
                         <li><code>SHARED_SECRET_TOKEN</code>: A custom password/token (must match the token entered below).</li>
                         <li><code>ORIGIN_STATUS_URL</code>: Your status page URL (<code><?= htmlspecialchars(app_url()) ?></code>).</li>
                         <li><code>DISCORD_WEBHOOK_URL</code>: <em>(Optional)</em> Discord webhook for alerts if your origin server dies.</li>
-                        <li><code>STATUS_KV</code>: <em>(Optional)</em> KV Namespace binding to track outage duration across reboots.</li>
                     </ul>
                 </li>
                 <li class="mb-1">
