@@ -1,9 +1,32 @@
 <!-- path: app/Views/admin/monitors/index.php -->
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
+<style>
+    /* Custom DataTables Styling Enhancements */
+    .dataTables_wrapper .dataTables_filter input {
+        border-radius: 0.375rem;
+        padding: 0.375rem 0.75rem;
+        border: 1px solid #dee2e6;
+    }
+    .dataTables_wrapper .dataTables_length select {
+        border-radius: 0.375rem;
+        padding: 0.375rem 2rem 0.375rem 0.75rem;
+        border: 1px solid #dee2e6;
+    }
+    .dataTables_info, .dataTables_paginate {
+        padding-top: 1rem !important;
+        padding-bottom: 0.5rem !important;
+    }
+    tr.dt-child-row td {
+        background-color: #f8f9fa !important;
+        padding: 0 !important;
+    }
+</style>
+
 <div class="container-fluid py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h2 class="fw-bold mb-0">Monitors & Services</h2>
-            <p class="text-muted">Manage core endpoints, secondary cloud feeds, and display order.</p>
+            <p class="text-muted mb-0">Manage core endpoints, secondary cloud feeds, and display order.</p>
         </div>
         <div class="d-flex gap-2">
             <button type="submit" form="orderForm" class="btn btn-outline-secondary">
@@ -43,9 +66,9 @@
         </div>
     <?php endif; ?>
 
-    <form id="orderForm" action="/admin/monitors/save-order" method="POST" class="card shadow-sm border-0">
+    <form id="orderForm" action="/admin/monitors/save-order" method="POST" class="card shadow-sm border-0 p-3">
         <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
+            <table id="monitorsTable" class="table table-hover align-middle mb-0 w-100">
                 <thead class="table-light">
                     <tr>
                         <th style="width: 70px;" class="text-center">Order</th>
@@ -59,16 +82,12 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <?php if (empty($monitors)): ?>
-                        <tr><td colspan="8" class="text-center py-4 text-muted">No monitors found.</td></tr>
-                    <?php endif; ?>
-
                     <?php foreach ($monitors as $m): ?>
                         <?php 
                             $hasChildren = !empty($m['children']); 
-                            $isExternal = !empty($m['is_external']);
+                            $isExternal  = !empty($m['is_external']);
                         ?>
-                        <tr>
+                        <tr data-monitor-id="<?= $m['id'] ?>">
                             <!-- Order Input (Applies only to root monitor) -->
                             <td class="text-center">
                                 <input type="number" 
@@ -96,12 +115,11 @@
                                         </span>
                                     <?php endif; ?>
                                     <?php if ($hasChildren): ?>
-                                        <button class="btn btn-xs btn-outline-primary py-0 px-2 rounded-pill" 
+                                        <button class="btn btn-xs btn-outline-primary py-0 px-2 rounded-pill btn-toggle-subservices" 
                                                 style="font-size: 11px;" 
                                                 type="button" 
-                                                data-bs-toggle="collapse" 
-                                                data-bs-target="#adminChildren<?= $m['id'] ?>">
-                                            <?= count($m['children']) ?> sub-services <i class="bi bi-chevron-down"></i>
+                                                data-monitor-id="<?= $m['id'] ?>">
+                                            <span><?= count($m['children']) ?> sub-services</span> <i class="bi bi-chevron-down ms-1"></i>
                                         </button>
                                     <?php endif; ?>
                                 </div>
@@ -135,35 +153,36 @@
                                 </div>
                             </td>
                         </tr>
-
-                        <!-- Sub-services Drawer in Admin Table -->
-                        <?php if ($hasChildren): ?>
-                            <tr class="collapse bg-light" id="adminChildren<?= $m['id'] ?>">
-                                <td colspan="8" class="p-3">
-                                    <div class="ps-4 border-start border-3 border-primary">
-                                        <h6 class="fw-bold text-muted small mb-2">Sub-services under <?= htmlspecialchars($m['name']) ?>:</h6>
-                                        <div class="row g-2">
-                                            <?php foreach ($m['children'] as $child): ?>
-                                                <div class="col-md-6 col-lg-4">
-                                                    <div class="d-flex justify-content-between align-items-center p-2 bg-white rounded border small">
-                                                        <span class="text-truncate fw-semibold"><?= htmlspecialchars($child['name']) ?></span>
-                                                        <span class="badge bg-<?= $child['current_status'] === 'operational' ? 'success' : 'warning text-dark' ?> ms-2">
-                                                            <?= strtoupper($child['current_status']) ?>
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            <?php endforeach; ?>
-                                        </div>
-                                    </div>
-                                </td>
-                            </tr>
-                        <?php endif; ?>
                     <?php endforeach; ?>
                 </tbody>
             </table>
         </div>
     </form>
 </div>
+
+<?php foreach ($monitors as $m): ?>
+    <?php if (!empty($m['children'])): ?>
+        <template id="child-template-<?= $m['id'] ?>">
+            <div class="p-3 bg-light border-top border-bottom">
+                <div class="ps-4 border-start border-3 border-primary">
+                    <h6 class="fw-bold text-muted small mb-2">Sub-services under <?= htmlspecialchars($m['name']) ?>:</h6>
+                    <div class="row g-2">
+                        <?php foreach ($m['children'] as $child): ?>
+                            <div class="col-md-6 col-lg-4">
+                                <div class="d-flex justify-content-between align-items-center p-2 bg-white rounded border small">
+                                    <span class="text-truncate fw-semibold"><?= htmlspecialchars($child['name']) ?></span>
+                                    <span class="badge bg-<?= $child['current_status'] === 'operational' ? 'success' : 'warning text-dark' ?> ms-2">
+                                        <?= strtoupper($child['current_status']) ?>
+                                    </span>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            </div>
+        </template>
+    <?php endif; ?>
+<?php endforeach; ?>
 
 <!-- Standalone Delete Forms -->
 <?php foreach ($monitors as $m): ?>
@@ -172,7 +191,6 @@
     </form>
 <?php endforeach; ?>
 
-<!-- Modals: Edit Monitor (Generated only for Manual Monitors) -->
 <?php foreach ($monitors as $m): ?>
     <?php if (empty($m['is_external'])): ?>
         <div class="modal fade" id="editMonitorModal<?= $m['id'] ?>" tabindex="-1">
@@ -257,7 +275,6 @@
     <?php endif; ?>
 <?php endforeach; ?>
 
-<!-- Modal: Add New Monitor -->
 <div class="modal fade" id="newMonitorModal" tabindex="-1">
     <div class="modal-dialog">
         <form action="/admin/monitors/store" method="POST" class="modal-content">
@@ -334,7 +351,51 @@
     </div>
 </div>
 
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+
 <script>
+$(document).ready(function() {
+    // Initialize DataTables cleanly without DOM column count mismatches
+    if ($('#monitorsTable tbody tr').length > 0) {
+        var table = $('#monitorsTable').DataTable({
+            ordering: false, // Maintain custom display order
+            pageLength: 25,
+            lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]],
+            language: {
+                search: "_INPUT_",
+                searchPlaceholder: "Search monitors, routes, types...",
+                lengthMenu: "Show _MENU_ entries",
+                info: "Showing _START_ to _END_ of _TOTAL_ monitors",
+                infoEmpty: "No monitors available",
+                zeroRecords: "No matching monitors found"
+            },
+            columnDefs: [
+                { orderable: false, targets: '_all' }
+            ]
+        });
+
+        // Toggle Sub-services Drawer via DataTables Native Child Rows API
+        $('#monitorsTable tbody').on('click', '.btn-toggle-subservices', function () {
+            var tr = $(this).closest('tr');
+            var row = table.row(tr);
+            var mId = $(this).data('monitor-id');
+            var template = document.getElementById('child-template-' + mId);
+
+            if (row.child.isShown()) {
+                row.child.hide();
+                tr.removeClass('dt-has-child-expanded');
+                $(this).find('i').removeClass('bi-chevron-up').addClass('bi-chevron-down');
+            } else if (template) {
+                row.child(template.innerHTML, 'dt-child-row').show();
+                tr.addClass('dt-has-child-expanded');
+                $(this).find('i').removeClass('bi-chevron-down').addClass('bi-chevron-up');
+            }
+        });
+    }
+});
+
 function togglePortField() {
     const type = document.getElementById('probeType').value;
     const portField = document.getElementById('portFieldWrapper');
