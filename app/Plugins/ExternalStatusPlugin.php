@@ -103,20 +103,7 @@ class ExternalStatusPlugin
         $targetUrl   = "https://dash.cloudflare.com/{$accountId}/networks/tunnels/{$tunnelId}";
         $parentId    = $isPrimary ? null : $this->getCloudflareParentId();
 
-        // 1. Check existing monitor state
-        $stmt = $this->db->prepare("SELECT id, current_status, last_check FROM monitors WHERE target = ? LIMIT 1");
-        $stmt->execute([$targetUrl]);
-        $existing = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        // 2. Throttle checks: do not poll Cloudflare API more than once every 5 minutes (300s) unless forced
-        if (!$this->forceInsert && $existing && !empty($existing['last_check'])) {
-            $secondsSinceLastCheck = time() - strtotime($existing['last_check']);
-            if ($secondsSinceLastCheck < 300) {
-                return; // Skip: checked recently, avoids Cloudflare 429 Rate Limits
-            }
-        }
-
-        // 3. Query Cloudflare API v4 with generous 15s timeout
+        // 1. Query Cloudflare API v4 with generous 15s timeout
         $endpoints = [
             "https://api.cloudflare.com/client/v4/accounts/{$accountId}/cfd_tunnel/{$tunnelId}",
             "https://api.cloudflare.com/client/v4/accounts/{$accountId}/tunnels/{$tunnelId}"
@@ -149,25 +136,21 @@ class ExternalStatusPlugin
             }
         }
 
-        // 4. Anti-Flapping Safeguard:
-        // If Cloudflare API timed out or had a glitch, do NOT falsely mark down! Keep previous status.
+        // 2. Anti-Flapping Safeguard:
         if (!$apiCallSucceeded) {
-            if ($existing) {
-                // Do not change status on API failure to prevent false alarms
-                return;
-            }
-            $status = 'operational'; // Default initial state if newly created
-        } else {
-            $rawStatus = strtolower($tunnelData['status'] ?? 'down');
-            $status = match ($rawStatus) {
-                'healthy', 'active', 'operational' => 'operational',
-                'degraded'                         => 'degraded',
-                default                            => 'down'
-            };
+            // Keep previous status on temporary API network glitches
+            return;
+        }
 
-            if (!empty($tunnelData['name']) && empty(setting('cf_tunnel_name'))) {
-                $customLabel = $tunnelData['name'];
-            }
+        $rawStatus = strtolower($tunnelData['status'] ?? 'down');
+        $status = match ($rawStatus) {
+            'healthy', 'active', 'operational' => 'operational',
+            'degraded'                         => 'degraded',
+            default                            => 'down'
+        };
+
+        if (!empty($tunnelData['name']) && empty(setting('cf_tunnel_name'))) {
+            $customLabel = $tunnelData['name'];
         }
 
         $this->upsertMonitor("Tunnel: {$customLabel}", $targetUrl, $status, $parentId, $isPrimary);
