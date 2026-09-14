@@ -7,7 +7,7 @@ return [
      * The version string is checked against GitHub API tags for auto-updates.
      */
     'name'        => 'My System Status',
-    'version'     => '1.0.20',
+    'version'     => '1.0.22',
 
     /*
      * Debug Mode
