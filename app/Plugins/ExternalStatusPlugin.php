@@ -9,6 +9,7 @@ use PDO;
 class ExternalStatusPlugin
 {
     private PDO $db;
+    private bool $forceInsert = false;
 
     public function __construct()
     {
@@ -40,7 +41,7 @@ class ExternalStatusPlugin
         }
 
         // 2. Custom Cloudflare Zero Trust Tunnel
-        $this->syncCustomCloudflareTunnel();
+        $this->syncCustomCloudflareTunnel($forceInsert);
 
         // 3. Amazon AWS
         if (setting('feed_aws_enabled', '1') === '1') {
@@ -83,8 +84,12 @@ class ExternalStatusPlugin
     /**
      * Check individual Cloudflare Zero Trust Tunnel health via Cloudflare API v4
      */
-    public function syncCustomCloudflareTunnel(): void
+    public function syncCustomCloudflareTunnel(bool $forceInsert = false): void
     {
+        if ($forceInsert) {
+            $this->forceInsert = true;
+        }
+
         $accountId = trim(setting('cf_tunnel_account_id', ''));
         $tunnelId  = trim(setting('cf_tunnel_id', ''));
         $apiToken  = trim(setting('cf_tunnel_api_token', ''));
@@ -92,6 +97,13 @@ class ExternalStatusPlugin
         if (empty($accountId) || empty($tunnelId) || empty($apiToken)) {
             return;
         }
+
+        $customLabel = setting('cf_tunnel_name') ?: 'Zero Trust Tunnel';
+        $isPrimary   = (setting('cf_tunnel_is_primary', '1') === '1') ? 1 : 0;
+        $targetUrl   = "https://dash.cloudflare.com/{$accountId}/networks/tunnels/{$tunnelId}";
+
+        // If marked as Primary, parent_id is NULL so it appears in Core Infrastructure
+        $parentId = $isPrimary ? null : $this->getCloudflareParentId();
 
         // Try standard Cloudflare v4 Tunnel endpoints
         $endpoints = [
@@ -124,22 +136,23 @@ class ExternalStatusPlugin
         }
 
         if ($tunnelData) {
-            $rawStatus    = strtolower($tunnelData['status'] ?? 'down');
-            $customLabel  = setting('cf_tunnel_name') ?: ($tunnelData['name'] ?? 'Zero Trust Tunnel');
-            $isPrimary    = (setting('cf_tunnel_is_primary', '1') === '1') ? 1 : 0;
-
+            $rawStatus = strtolower($tunnelData['status'] ?? 'down');
             $status = match ($rawStatus) {
-                'healthy'  => 'operational',
-                'degraded' => 'degraded',
-                default    => 'down'
+                'healthy', 'active' => 'operational',
+                'degraded'          => 'degraded',
+                default             => 'down'
             };
 
-            $targetUrl = "https://dash.cloudflare.com/{$accountId}/networks/tunnels/{$tunnelId}";
-
-            // If marked as Primary, parent_id is NULL so it appears in Core Infrastructure
-            $parentId = $isPrimary ? null : $this->getCloudflareParentId();
-            $this->upsertMonitor("Tunnel: {$customLabel}", $targetUrl, $status, $parentId, $isPrimary);
+            if (!empty($tunnelData['name']) && empty(setting('cf_tunnel_name'))) {
+                $customLabel = $tunnelData['name'];
+            }
+        } else {
+            // Unreachable or invalid API token / 404 response
+            $status = 'down';
         }
+
+        // Always upsert monitor (creates new monitor when saving settings, or updates existing status)
+        $this->upsertMonitor("Tunnel: {$customLabel}", $targetUrl, $status, $parentId, $isPrimary);
     }
 
     private function getCloudflareParentId(): ?int
@@ -285,6 +298,9 @@ class ExternalStatusPlugin
         return $status;
     }
 
+    /**
+     * Insert new probe if forceInsert is true, or update if monitor already exists.
+     */
     private function upsertMonitor(string $name, string $target, string $status, ?int $parentId, int $isPrimary = 0): int
     {
         $stmt = $this->db->prepare("SELECT id, is_active FROM monitors WHERE target = ? LIMIT 1");
