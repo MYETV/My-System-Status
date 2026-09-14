@@ -62,12 +62,12 @@ class SettingController
             }
         }
 
-        // 3. Immediately poll Cloudflare Tunnel if configured so it appears right away
+        // 3. Immediately poll Cloudflare Tunnel with forceInsert = true so new tunnels are created in database
         try {
             $plugin = new ExternalStatusPlugin();
-            $plugin->syncCustomCloudflareTunnel();
+            $plugin->syncAll(true);
         } catch (\Throwable $e) {
-            // Ignore if credentials not yet configured
+            // Ignore if credentials not yet configured or connection fails
         }
 
         header('Location: /admin/settings?saved=1');
