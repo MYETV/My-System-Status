@@ -35,10 +35,13 @@ class EdgeProbeService
             AND type = 'http' 
             AND target NOT LIKE 'https://www.cloudflarestatus.com%'
             AND target NOT LIKE 'https://status.aws.amazon.com%'
+            AND target NOT LIKE 'https://health.aws.amazon.com%'
             AND target NOT LIKE 'https://azure.status.microsoft%'
             AND target NOT LIKE 'https://status.stripe.com%'
             AND target NOT LIKE 'https://www.paypal-status.com%'
             AND target NOT LIKE 'https://www.githubstatus.com%'
+            AND target NOT LIKE 'https://dash.cloudflare.com%'
+            AND name NOT LIKE 'Tunnel:%'
         ");
         $monitors = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
