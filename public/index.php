@@ -55,6 +55,14 @@ $router->get('/subscribe/verify', [\App\Controllers\StatusPageController::class,
 $router->get('/subscribe/unsubscribe', [\App\Controllers\StatusPageController::class, 'unsubscribe']);
 $router->post('/subscribe/request-unsubscribe', [\App\Controllers\StatusPageController::class, 'requestUnsubscribe']);
 $router->get('/subscribe/confirm-unsubscribe', [\App\Controllers\StatusPageController::class, 'confirmUnsubscribe']);
+// Admin API Keys Management
+$router->get('/admin/api-keys', [\App\Controllers\Admin\ApiKeyController::class, 'index']);
+$router->post('/admin/api-keys/store', [\App\Controllers\Admin\ApiKeyController::class, 'store']);
+$router->post('/admin/api-keys/delete', [\App\Controllers\Admin\ApiKeyController::class, 'delete']);
+// Public REST API Endpoints (Protected by API Key)
+$router->post('/api/v1/maintenance/enable', [\App\Controllers\Api\MaintenanceApiController::class, 'enable']);
+$router->post('/api/v1/maintenance/disable', [\App\Controllers\Api\MaintenanceApiController::class, 'disable']);
+
 // ==========================================
 // AUTHENTICATION & 2FA ROUTES
 // ==========================================
