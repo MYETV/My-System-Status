@@ -5,6 +5,7 @@ namespace App\Controllers\Admin;
 
 use App\Core\Database;
 use App\Core\View;
+use App\Services\MailerService;
 use PDO;
 
 class MaintenanceController
@@ -106,6 +107,9 @@ class MaintenanceController
                 VALUES (?, ?, ?, ?, ?, ?)
             ");
             $stmt->execute([$title, $monitorId, $description, $start, $end, $status]);
+
+            // Notify verified subscribers via SMTP email
+            $this->sendMaintenanceEmailNotifications($title, $monitorId, $description, $start, $end, $status, false);
         }
 
         header('Location: /admin/maintenance?created=1');
@@ -129,6 +133,9 @@ class MaintenanceController
                 WHERE id = ?
             ");
             $stmt->execute([$title, $monitorId, $description, $start, $end, $status, $id]);
+
+            // Notify verified subscribers about the maintenance update/completion
+            $this->sendMaintenanceEmailNotifications($title, $monitorId, $description, $start, $end, $status, true);
         }
 
         header('Location: /admin/maintenance?updated=1');
@@ -145,5 +152,112 @@ class MaintenanceController
 
         header('Location: /admin/maintenance?deleted=1');
         exit;
+    }
+
+    /**
+     * Send email notifications to all verified global and monitor-specific subscribers.
+     */
+    private function sendMaintenanceEmailNotifications(string $title, ?int $monitorId, string $description, string $start, string $end, string $status, bool $isUpdate = false): void
+    {
+        $smtpHost = setting('smtp_host', '');
+        if (empty($smtpHost)) {
+            return; // SMTP disabled
+        }
+
+        // 1. Resolve affected service name
+        $serviceName = 'All Services (Global)';
+        if ($monitorId !== null) {
+            $stmtM = $this->db->prepare("SELECT name FROM monitors WHERE id = ? LIMIT 1");
+            $stmtM->execute([$monitorId]);
+            $mName = $stmtM->fetchColumn();
+            if ($mName) {
+                $serviceName = $mName;
+            }
+        }
+
+        // 2. Fetch subscribers (Global OR specific monitor)
+        if ($monitorId !== null) {
+            $stmtSub = $this->db->prepare("
+                SELECT DISTINCT email, token 
+                FROM subscribers 
+                WHERE is_verified = 1 AND (monitor_id IS NULL OR monitor_id = ?)
+            ");
+            $stmtSub->execute([$monitorId]);
+        } else {
+            $stmtSub = $this->db->query("
+                SELECT DISTINCT email, token 
+                FROM subscribers 
+                WHERE is_verified = 1
+            ");
+        }
+
+        $subscribers = $stmtSub->fetchAll(PDO::FETCH_ASSOC);
+        if (empty($subscribers)) {
+            return;
+        }
+
+        // 3. Configure Mailer
+        $smtpConfig = [
+            'host'       => $smtpHost,
+            'port'       => setting('smtp_port', '587'),
+            'username'   => setting('smtp_user', ''),
+            'password'   => setting('smtp_pass', ''),
+            'encryption' => setting('smtp_encryption', 'starttls'),
+            'from_email' => setting('smtp_from', ''),
+            'from_name'  => setting('app_name', 'My System Status')
+        ];
+
+        $mailer = new MailerService($smtpConfig);
+        $appName = setting('app_name', 'My System Status');
+        $appUrl = rtrim(setting('app_url', app_url()), '/');
+
+        $actionText = $isUpdate ? "Updated" : "Scheduled";
+        $subjectPrefix = $isUpdate ? "[UPDATE]" : "[MAINTENANCE]";
+        $subject = "{$subjectPrefix} {$title} - {$appName}";
+
+        $formattedStart = date('M d, Y H:i', strtotime($start));
+        $formattedEnd   = date('M d, Y H:i T', strtotime($end));
+
+        // 4. Dispatch email to each subscriber
+        foreach ($subscribers as $sub) {
+            $unsubUrl = $appUrl . "/subscribe/confirm-unsubscribe?token=" . urlencode($sub['token']);
+
+            $htmlBody = "
+                <div style=\"font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 8px; background: #ffffff;\">
+                    <h2 style=\"color: #2563eb; margin-top: 0; font-size: 20px;\">🛠️ Scheduled Maintenance {$actionText}</h2>
+                    <p style=\"color: #475569; font-size: 15px;\">A maintenance window has been <strong>{$actionText}</strong> on <a href=\"{$appUrl}\" style=\"color: #2563eb; text-decoration: none;\">{$appName}</a>.</p>
+
+                    <div style=\"background: #f8fafc; padding: 16px; border-left: 4px solid #2563eb; margin: 20px 0; border-radius: 4px;\">
+                        <p style=\"margin: 0 0 8px 0; font-size: 14px; color: #1e293b;\"><strong>Event Title:</strong> " . htmlspecialchars($title) . "</p>
+                        <p style=\"margin: 0 0 8px 0; font-size: 14px; color: #1e293b;\"><strong>Target Service:</strong> " . htmlspecialchars($serviceName) . "</p>
+                        <p style=\"margin: 0 0 8px 0; font-size: 14px; color: #1e293b;\"><strong>Current Status:</strong> " . strtoupper(htmlspecialchars(str_replace('_', ' ', $status))) . "</p>
+                        <p style=\"margin: 0; font-size: 14px; color: #1e293b;\"><strong>Execution Window:</strong> {$formattedStart} &mdash; {$formattedEnd}</p>
+                    </div>
+
+                    " . (!empty($description) ? "
+                    <p style=\"color: #334155; font-size: 14px;\"><strong>Maintenance Details & Impact:</strong></p>
+                    <div style=\"background: #ffffff; padding: 12px 16px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; color: #334155; line-height: 1.5;\">
+                        " . nl2br(htmlspecialchars($description)) . "
+                    </div>
+                    " : "") . "
+
+                    <div style=\"margin-top: 24px; text-align: center;\">
+                        <a href=\"{$appUrl}\" style=\"display: inline-block; padding: 10px 20px; background: #2563eb; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 14px;\">View System Status Page</a>
+                    </div>
+
+                    <hr style=\"border: none; border-top: 1px solid #e2e8f0; margin: 30px 0 15px 0;\">
+                    <p style=\"font-size: 12px; color: #94a3b8; text-align: center; margin: 0;\">
+                        You received this email because you are subscribed to alert notifications on {$appName}.<br>
+                        <a href=\"{$unsubUrl}\" style=\"color: #64748b; text-decoration: underline;\">Unsubscribe from all notifications</a>
+                    </p>
+                </div>
+            ";
+
+            try {
+                $mailer->send($sub['email'], $subject, $htmlBody);
+            } catch (\Throwable $e) {
+                // Continue sending to remaining subscribers
+            }
+        }
     }
 }
