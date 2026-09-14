@@ -206,6 +206,10 @@
                                     <option value="30" <?= (int)$m['interval_seconds'] === 30 ? 'selected' : '' ?>>Every 30 seconds</option>
                                     <option value="60" <?= (int)$m['interval_seconds'] === 60 ? 'selected' : '' ?>>Every 1 minute</option>
                                     <option value="300" <?= (int)$m['interval_seconds'] === 300 ? 'selected' : '' ?>>Every 5 minutes</option>
+                                    <option value="600" <?= (int)$m['interval_seconds'] === 600 ? 'selected' : '' ?>>Every 10 minutes</option>
+                                    <option value="900" <?= (int)$m['interval_seconds'] === 900 ? 'selected' : '' ?>>Every 15 minutes</option>
+                                    <option value="1800" <?= (int)$m['interval_seconds'] === 1800 ? 'selected' : '' ?>>Every 30 minutes</option>
+                                    <option value="3600" <?= (int)$m['interval_seconds'] === 3600 ? 'selected' : '' ?>>Every 1 hour</option>
                                 </select>
                             </div>
                         </div>
@@ -283,6 +287,10 @@
                             <option value="30">Every 30 seconds</option>
                             <option value="60" selected>Every 1 minute</option>
                             <option value="300">Every 5 minutes</option>
+                            <option value="600">Every 10 minutes</option>
+                            <option value="900">Every 15 minutes</option>
+                            <option value="1800">Every 30 minutes</option>
+                            <option value="3600">Every 1 hour</option>
                         </select>
                     </div>
                 </div>
