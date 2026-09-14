@@ -127,7 +127,7 @@ class ExternalStatusPlugin
             }
         }
 
-        // 2. Fallback: List all active tunnels if direct match failed (e.g. Connector ID used)
+        // 2. Fallback: List all active tunnels if direct match failed
         if (!$tunnelData) {
             $listUrl = "https://api.cloudflare.com/client/v4/accounts/{$accountId}/cfd_tunnel?is_deleted=false";
             $ch = curl_init($listUrl);
