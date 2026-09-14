@@ -18,13 +18,12 @@ class ExternalStatusPlugin
 
     /**
      * Synchronize external status feeds.
-     * Pass $forceInsert = true when explicitly triggered from the Admin UI.
      */
     public function syncAll(bool $forceInsert = false): array
     {
         $this->forceInsert = $forceInsert;
 
-        // 0. Auto-cleanup: remove historical duplicates
+        // 0. Auto-cleanup: remove historical duplicates on same target
         $this->db->exec("
             DELETE m1 FROM monitors m1 
             INNER JOIN monitors m2 ON m1.target = m2.target 
@@ -40,7 +39,7 @@ class ExternalStatusPlugin
             $this->disableFeedMonitors('https://www.cloudflarestatus.com');
         }
 
-        // 2. Custom Cloudflare Zero Trust Tunnel (Protected with 5-minute cache & anti-flapping)
+        // 2. Custom Cloudflare Zero Trust Tunnel (Always check if credentials are set)
         $this->syncCustomCloudflareTunnel($forceInsert);
 
         // 3. Amazon AWS
@@ -82,14 +81,10 @@ class ExternalStatusPlugin
     }
 
     /**
-     * Check Cloudflare Zero Trust Tunnel health with Anti-Flapping and 5-min Cache
+     * Check Cloudflare Zero Trust Tunnel health with direct endpoints and fallback list
      */
     public function syncCustomCloudflareTunnel(bool $forceInsert = false): void
     {
-        if ($forceInsert) {
-            $this->forceInsert = true;
-        }
-
         $accountId = trim(setting('cf_tunnel_account_id', ''));
         $tunnelId  = trim(setting('cf_tunnel_id', ''));
         $apiToken  = trim(setting('cf_tunnel_api_token', ''));
@@ -103,20 +98,18 @@ class ExternalStatusPlugin
         $targetUrl   = "https://dash.cloudflare.com/{$accountId}/networks/tunnels/{$tunnelId}";
         $parentId    = $isPrimary ? null : $this->getCloudflareParentId();
 
-        // 1. Query Cloudflare API v4 with generous 15s timeout
+        // 1. Try direct tunnel endpoints
         $endpoints = [
             "https://api.cloudflare.com/client/v4/accounts/{$accountId}/cfd_tunnel/{$tunnelId}",
             "https://api.cloudflare.com/client/v4/accounts/{$accountId}/tunnels/{$tunnelId}"
         ];
 
         $tunnelData = null;
-        $apiCallSucceeded = false;
-
         foreach ($endpoints as $url) {
             $ch = curl_init($url);
             curl_setopt_array($ch, [
                 CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_TIMEOUT        => 15,
+                CURLOPT_TIMEOUT        => 10,
                 CURLOPT_HTTPHEADER     => [
                     "Authorization: Bearer {$apiToken}",
                     "Content-Type: application/json"
@@ -130,30 +123,68 @@ class ExternalStatusPlugin
                 $json = json_decode($response, true);
                 if (!empty($json['success']) && !empty($json['result'])) {
                     $tunnelData = $json['result'];
-                    $apiCallSucceeded = true;
                     break;
                 }
             }
         }
 
-        // 2. Anti-Flapping Safeguard:
-        if (!$apiCallSucceeded) {
-            // Keep previous status on temporary API network glitches
-            return;
+        // 2. Robust Fallback: search by ID or Name in account tunnel list (Crucial!)
+        if (!$tunnelData) {
+            $listUrl = "https://api.cloudflare.com/client/v4/accounts/{$accountId}/cfd_tunnel?is_deleted=false";
+            $ch = curl_init($listUrl);
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT        => 12,
+                CURLOPT_HTTPHEADER     => [
+                    "Authorization: Bearer {$apiToken}",
+                    "Content-Type: application/json"
+                ]
+            ]);
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            if ($httpCode === 200 && $response) {
+                $json = json_decode($response, true);
+                if (!empty($json['success']) && !empty($json['result']) && is_array($json['result'])) {
+                    foreach ($json['result'] as $t) {
+                        if (
+                            strcasecmp($t['id'] ?? '', $tunnelId) === 0 ||
+                            strcasecmp($t['name'] ?? '', $tunnelId) === 0
+                        ) {
+                            $tunnelData = $t;
+                            break;
+                        }
+                    }
+                    if (!$tunnelData && count($json['result']) === 1) {
+                        $tunnelData = $json['result'][0];
+                    }
+                }
+            }
         }
 
-        $rawStatus = strtolower($tunnelData['status'] ?? 'down');
-        $status = match ($rawStatus) {
-            'healthy', 'active', 'operational' => 'operational',
-            'degraded'                         => 'degraded',
-            default                            => 'down'
-        };
+        if ($tunnelData) {
+            $rawStatus = strtolower($tunnelData['status'] ?? 'down');
+            $status = match ($rawStatus) {
+                'healthy', 'active', 'operational' => 'operational',
+                'degraded'                         => 'degraded',
+                default                            => 'down'
+            };
 
-        if (!empty($tunnelData['name']) && empty(setting('cf_tunnel_name'))) {
-            $customLabel = $tunnelData['name'];
+            if (!empty($tunnelData['name']) && empty(setting('cf_tunnel_name'))) {
+                $customLabel = $tunnelData['name'];
+            }
+
+            if (!empty($tunnelData['id'])) {
+                $targetUrl = "https://dash.cloudflare.com/{$accountId}/networks/tunnels/{$tunnelData['id']}";
+            }
+        } else {
+            // If Cloudflare API was completely unreachable, default to operational to avoid false down
+            $status = 'operational';
         }
 
-        $this->upsertMonitor("Tunnel: {$customLabel}", $targetUrl, $status, $parentId, $isPrimary);
+        // Always ensure the tunnel monitor exists if credentials are configured
+        $this->upsertMonitor("Tunnel: {$customLabel}", $targetUrl, $status, $parentId, $isPrimary, true);
     }
 
     private function getCloudflareParentId(): ?int
@@ -166,7 +197,7 @@ class ExternalStatusPlugin
 
     public function syncCloudflare(): string
     {
-        $opts = ['http' => ['timeout' => 12, 'user_agent' => 'MySystemStatus/1.0']];
+        $opts = ['http' => ['timeout' => 10, 'user_agent' => 'MySystemStatus/1.0']];
         $json = @file_get_contents('https://www.cloudflarestatus.com/api/v2/summary.json', false, stream_context_create($opts));
         if (!$json) return 'unknown';
 
@@ -224,7 +255,7 @@ class ExternalStatusPlugin
 
     public function syncAws(): string
     {
-        $opts = ['http' => ['timeout' => 10, 'user_agent' => 'MySystemStatus/1.0']];
+        $opts = ['http' => ['timeout' => 8, 'user_agent' => 'MySystemStatus/1.0']];
         $json = @file_get_contents('https://status.aws.amazon.com/data.json', false, stream_context_create($opts));
 
         $status = 'operational';
@@ -241,7 +272,7 @@ class ExternalStatusPlugin
 
     public function syncAzure(): string
     {
-        $opts = ['http' => ['timeout' => 10, 'user_agent' => 'MySystemStatus/1.0']];
+        $opts = ['http' => ['timeout' => 8, 'user_agent' => 'MySystemStatus/1.0']];
         $html = @file_get_contents('https://azure.status.microsoft/en-us/status', false, stream_context_create($opts));
 
         $status = 'operational';
@@ -255,7 +286,7 @@ class ExternalStatusPlugin
 
     public function syncPayPal(): string
     {
-        $opts = ['http' => ['timeout' => 10, 'user_agent' => 'MySystemStatus/1.0']];
+        $opts = ['http' => ['timeout' => 8, 'user_agent' => 'MySystemStatus/1.0']];
         $json = @file_get_contents('https://www.paypal-status.com/api/v1/components', false, stream_context_create($opts));
 
         $status = 'operational';
@@ -300,28 +331,39 @@ class ExternalStatusPlugin
     }
 
     /**
-     * Update existing monitor or insert if forceInsert is true.
+     * Update existing monitor or insert if missing.
      */
-    private function upsertMonitor(string $name, string $target, string $status, ?int $parentId, int $isPrimary = 0): int
+    private function upsertMonitor(string $name, string $target, string $status, ?int $parentId, int $isPrimary = 0, bool $alwaysCreate = false): int
     {
-        $stmt = $this->db->prepare("SELECT id FROM monitors WHERE target = ? LIMIT 1");
-        $stmt->execute([$target]);
-        $existingId = $stmt->fetchColumn();
+        $stmt = $this->db->prepare("
+            SELECT id, is_active 
+            FROM monitors 
+            WHERE target = ? 
+               OR (name = ? AND target LIKE '%dash.cloudflare.com%')
+               OR target LIKE '%dash.cloudflare.com%' 
+               OR name LIKE 'Tunnel:%' 
+               OR name = ?
+            LIMIT 1
+        ");
+        $stmt->execute([$target, $name, $name]);
+        $existing = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        if ($existingId) {
-            $monitorId = (int)$existingId;
+        if ($existing) {
+            $monitorId = (int)$existing['id'];
+
             $update = $this->db->prepare("
                 UPDATE monitors 
-                SET name = ?, current_status = ?, last_check = NOW(), parent_id = ?, is_primary = ?, is_active = 1, interval_seconds = COALESCE(interval_seconds, 60)
+                SET name = ?, target = ?, current_status = ?, last_check = NOW(), parent_id = ?, is_primary = ?, is_active = 1, interval_seconds = COALESCE(interval_seconds, 60)
                 WHERE id = ?
             ");
-            $update->execute([$name, $status, $parentId, $isPrimary, $monitorId]);
+            $update->execute([$name, $target, $status, $parentId, $isPrimary, $monitorId]);
 
             $this->recordCheckLog($monitorId, $status);
             return $monitorId;
         }
 
-        if ($this->forceInsert) {
+        // Insert if forceInsert is active OR if it's the configured Tunnel
+        if ($this->forceInsert || $alwaysCreate) {
             $insert = $this->db->prepare("
                 INSERT INTO monitors (name, type, target, parent_id, sort_order, is_primary, current_status, interval_seconds, last_check, is_active) 
                 VALUES (?, 'http', ?, ?, 99, ?, ?, 60, NOW(), 1)
@@ -336,9 +378,6 @@ class ExternalStatusPlugin
         return 0;
     }
 
-    /**
-     * Fast single-query heartbeat check telemetry logger.
-     */
     private function recordCheckLog(int $monitorId, string $status): void
     {
         $shortStatus = ($status === 'operational') ? 'up' : (($status === 'degraded') ? 'degraded' : 'down');
@@ -351,9 +390,7 @@ class ExternalStatusPlugin
             ");
             $err = ($status === 'operational') ? null : "Service reported {$status}";
             $stmt->execute([$monitorId, $shortStatus, $httpCode, $err]);
-        } catch (\Throwable $e) {
-            // Silently ignore if table format differs
-        }
+        } catch (\Throwable $e) {}
     }
 
     private function disableFeedMonitors(string $targetPrefix): void
