@@ -22,6 +22,27 @@
         </div>
     <?php endif; ?>
 
+    <?php if (isset($_GET['created'])): ?>
+        <div class="alert alert-success alert-dismissible fade show shadow-sm" role="alert">
+            <i class="bi bi-check-circle-fill me-2"></i> New monitor route created successfully!
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    <?php endif; ?>
+
+    <?php if (isset($_GET['updated'])): ?>
+        <div class="alert alert-success alert-dismissible fade show shadow-sm" role="alert">
+            <i class="bi bi-check-circle-fill me-2"></i> Monitor configuration updated successfully!
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    <?php endif; ?>
+
+    <?php if (isset($_GET['deleted'])): ?>
+        <div class="alert alert-info alert-dismissible fade show shadow-sm" role="alert">
+            <i class="bi bi-info-circle-fill me-2"></i> Monitor deleted successfully.
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    <?php endif; ?>
+
     <form id="orderForm" action="/admin/monitors/save-order" method="POST" class="card shadow-sm border-0">
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
@@ -43,7 +64,10 @@
                     <?php endif; ?>
 
                     <?php foreach ($monitors as $m): ?>
-                        <?php $hasChildren = !empty($m['children']); ?>
+                        <?php 
+                            $hasChildren = !empty($m['children']); 
+                            $isExternal = !empty($m['is_external']);
+                        ?>
                         <tr>
                             <!-- Order Input (Applies only to root monitor) -->
                             <td class="text-center">
@@ -66,6 +90,11 @@
                             <td>
                                 <div class="d-flex align-items-center gap-2">
                                     <strong class="text-dark"><?= htmlspecialchars($m['name']) ?></strong>
+                                    <?php if ($isExternal): ?>
+                                        <span class="badge bg-light text-dark border small" title="Automated plugin or Zero Trust tunnel feed">
+                                            <i class="bi bi-plugin me-1 text-primary"></i> Feed / Tunnel
+                                        </span>
+                                    <?php endif; ?>
                                     <?php if ($hasChildren): ?>
                                         <button class="btn btn-xs btn-outline-primary py-0 px-2 rounded-pill" 
                                                 style="font-size: 11px;" 
@@ -80,7 +109,7 @@
                             <td style="max-width: 220px;" class="text-truncate">
                                 <code class="small text-muted"><?= htmlspecialchars($m['target']) ?></code>
                             </td>
-                            <td><strong><?= number_format((float)$m['uptime_percentage'], 2) ?>%</strong></td>
+                            <td><strong><?= number_format((float)($m['uptime_percentage'] ?? 100), 2) ?>%</strong></td>
                             <td>
                                 <?php if ((int)($m['is_primary'] ?? 0) === 1): ?>
                                     <span class="badge bg-primary"><i class="bi bi-star-fill me-1"></i> Core Service</span>
@@ -89,9 +118,21 @@
                                 <?php endif; ?>
                             </td>
                             <td class="text-end">
-                                <button type="submit" form="deleteForm<?= $m['id'] ?>" class="btn btn-sm btn-outline-danger" title="Delete Monitor and all sub-services">
-                                    <i class="bi bi-trash"></i>
-                                </button>
+                                <div class="btn-group">
+                                    <?php if ($isExternal): ?>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" disabled title="Feed and Tunnel monitors cannot be edited manually.">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+                                    <?php else: ?>
+                                        <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editMonitorModal<?= $m['id'] ?>" title="Edit Monitor">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+                                    <?php endif; ?>
+                                    
+                                    <button type="submit" form="deleteForm<?= $m['id'] ?>" class="btn btn-sm btn-outline-danger" title="Delete Monitor and all sub-services">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
                             </td>
                         </tr>
 
@@ -105,7 +146,7 @@
                                             <?php foreach ($m['children'] as $child): ?>
                                                 <div class="col-md-6 col-lg-4">
                                                     <div class="d-flex justify-content-between align-items-center p-2 bg-white rounded border small">
-                                                        <span class="text-truncate"><?= htmlspecialchars($child['name']) ?></span>
+                                                        <span class="text-truncate fw-semibold"><?= htmlspecialchars($child['name']) ?></span>
                                                         <span class="badge bg-<?= $child['current_status'] === 'operational' ? 'success' : 'warning text-dark' ?> ms-2">
                                                             <?= strtoupper($child['current_status']) ?>
                                                         </span>
@@ -131,7 +172,88 @@
     </form>
 <?php endforeach; ?>
 
-<!-- Modal: Add Monitor -->
+<!-- Modals: Edit Monitor (Generated only for Manual Monitors) -->
+<?php foreach ($monitors as $m): ?>
+    <?php if (empty($m['is_external'])): ?>
+        <div class="modal fade" id="editMonitorModal<?= $m['id'] ?>" tabindex="-1">
+            <div class="modal-dialog">
+                <form action="/admin/monitors/update" method="POST" class="modal-content">
+                    <input type="hidden" name="id" value="<?= $m['id'] ?>">
+                    
+                    <div class="modal-header">
+                        <h5 class="modal-title fw-bold">Edit Monitor: <?= htmlspecialchars($m['name']) ?></h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Service / Route Name</label>
+                            <input type="text" name="name" class="form-control" value="<?= htmlspecialchars($m['name']) ?>" required>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Probe Type</label>
+                                <select name="type" id="probeTypeEdit<?= $m['id'] ?>" class="form-select" onchange="togglePortFieldEdit(<?= $m['id'] ?>)">
+                                    <option value="http" <?= $m['type'] === 'http' ? 'selected' : '' ?>>HTTP / HTTPS</option>
+                                    <option value="ping" <?= $m['type'] === 'ping' ? 'selected' : '' ?>>Ping (ICMP)</option>
+                                    <option value="port" <?= $m['type'] === 'port' ? 'selected' : '' ?>>TCP Port</option>
+                                    <option value="ssl" <?= $m['type'] === 'ssl' ? 'selected' : '' ?>>SSL Expiration Check</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Check Interval</label>
+                                <select name="interval_seconds" class="form-select">
+                                    <option value="30" <?= (int)$m['interval_seconds'] === 30 ? 'selected' : '' ?>>Every 30 seconds</option>
+                                    <option value="60" <?= (int)$m['interval_seconds'] === 60 ? 'selected' : '' ?>>Every 1 minute</option>
+                                    <option value="300" <?= (int)$m['interval_seconds'] === 300 ? 'selected' : '' ?>>Every 5 minutes</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Target (URL / Host / IP)</label>
+                            <input type="text" name="target" class="form-control" value="<?= htmlspecialchars($m['target']) ?>" required>
+                        </div>
+
+                        <div class="mb-3 <?= $m['type'] === 'port' ? '' : 'd-none' ?>" id="portFieldWrapperEdit<?= $m['id'] ?>">
+                            <label class="form-label fw-semibold">Port Number</label>
+                            <input type="number" name="port" class="form-control" value="<?= htmlspecialchars($m['port'] ?? '') ?>" placeholder="e.g. 3306, 22, 443">
+                        </div>
+
+                        <!-- Parent Group Assignment -->
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Parent Service Group (Optional)</label>
+                            <select name="parent_id" class="form-select">
+                                <option value="">None (Standalone / Parent Service)</option>
+                                <?php foreach ($parentsList as $parent): ?>
+                                    <?php if ($parent['id'] != $m['id']): ?>
+                                        <option value="<?= $parent['id'] ?>" <?= $m['parent_id'] == $parent['id'] ? 'selected' : '' ?>>
+                                            <?= htmlspecialchars($parent['name']) ?>
+                                        </option>
+                                    <?php endif; ?>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+
+                        <!-- Primary Core Service Checkbox -->
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" name="is_primary" value="1" id="primarySwitchEdit<?= $m['id'] ?>" <?= (int)$m['is_primary'] === 1 ? 'checked' : '' ?>>
+                            <label class="form-check-label fw-semibold" for="primarySwitchEdit<?= $m['id'] ?>">
+                                Mark as Core / Primary Service
+                            </label>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary fw-semibold">Save Changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    <?php endif; ?>
+<?php endforeach; ?>
+
+<!-- Modal: Add New Monitor -->
 <div class="modal fade" id="newMonitorModal" tabindex="-1">
     <div class="modal-dialog">
         <form action="/admin/monitors/store" method="POST" class="modal-content">
@@ -208,6 +330,16 @@
 function togglePortField() {
     const type = document.getElementById('probeType').value;
     const portField = document.getElementById('portFieldWrapper');
+    if (type === 'port') {
+        portField.classList.remove('d-none');
+    } else {
+        portField.classList.add('d-none');
+    }
+}
+
+function togglePortFieldEdit(id) {
+    const type = document.getElementById('probeTypeEdit' + id).value;
+    const portField = document.getElementById('portFieldWrapperEdit' + id);
     if (type === 'port') {
         portField.classList.remove('d-none');
     } else {
