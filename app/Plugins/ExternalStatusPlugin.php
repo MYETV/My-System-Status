@@ -24,6 +24,7 @@ class ExternalStatusPlugin
     {
         $this->forceInsert = $forceInsert;
 
+        // 0. Auto-cleanup: remove historical duplicates
         $this->db->exec("
             DELETE m1 FROM monitors m1 
             INNER JOIN monitors m2 ON m1.target = m2.target 
@@ -32,39 +33,45 @@ class ExternalStatusPlugin
 
         $results = [];
 
+        // 1. Cloudflare Public Services
         if (setting('feed_cloudflare_enabled', '1') === '1') {
             $results['cloudflare'] = $this->syncCloudflare();
         } else {
             $this->disableFeedMonitors('https://www.cloudflarestatus.com');
         }
 
-        // Custom Cloudflare Zero Trust Tunnel
+        // 2. Custom Cloudflare Zero Trust Tunnel (Protected with 5-minute cache & anti-flapping)
         $this->syncCustomCloudflareTunnel($forceInsert);
 
+        // 3. Amazon AWS
         if (setting('feed_aws_enabled', '1') === '1') {
             $results['aws'] = $this->syncAws();
         } else {
             $this->disableFeedMonitors('https://health.aws.amazon.com');
         }
 
+        // 4. Microsoft Azure
         if (setting('feed_azure_enabled', '1') === '1') {
             $results['azure'] = $this->syncAzure();
         } else {
             $this->disableFeedMonitors('https://azure.status.microsoft');
         }
 
+        // 5. Stripe
         if (setting('feed_stripe_enabled', '1') === '1') {
             $results['stripe'] = $this->syncStripe();
         } else {
             $this->disableFeedMonitors('https://status.stripe.com');
         }
 
+        // 6. PayPal
         if (setting('feed_paypal_enabled', '1') === '1') {
             $results['paypal'] = $this->syncPayPal();
         } else {
             $this->disableFeedMonitors('https://www.paypal-status.com');
         }
 
+        // 7. GitHub
         if (setting('feed_github_enabled', '1') === '1') {
             $results['github'] = $this->syncGitHub();
         } else {
@@ -75,7 +82,7 @@ class ExternalStatusPlugin
     }
 
     /**
-     * Check Cloudflare Zero Trust Tunnel health with fallback listing
+     * Check Cloudflare Zero Trust Tunnel health with Anti-Flapping and 5-min Cache
      */
     public function syncCustomCloudflareTunnel(bool $forceInsert = false): void
     {
@@ -94,21 +101,35 @@ class ExternalStatusPlugin
         $customLabel = setting('cf_tunnel_name') ?: 'Zero Trust Tunnel';
         $isPrimary   = (setting('cf_tunnel_is_primary', '1') === '1') ? 1 : 0;
         $targetUrl   = "https://dash.cloudflare.com/{$accountId}/networks/tunnels/{$tunnelId}";
+        $parentId    = $isPrimary ? null : $this->getCloudflareParentId();
 
-        $parentId = $isPrimary ? null : $this->getCloudflareParentId();
+        // 1. Check existing monitor state
+        $stmt = $this->db->prepare("SELECT id, current_status, last_check FROM monitors WHERE target = ? LIMIT 1");
+        $stmt->execute([$targetUrl]);
+        $existing = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        // 1. Try direct tunnel endpoints
+        // 2. Throttle checks: do not poll Cloudflare API more than once every 5 minutes (300s) unless forced
+        if (!$this->forceInsert && $existing && !empty($existing['last_check'])) {
+            $secondsSinceLastCheck = time() - strtotime($existing['last_check']);
+            if ($secondsSinceLastCheck < 300) {
+                return; // Skip: checked recently, avoids Cloudflare 429 Rate Limits
+            }
+        }
+
+        // 3. Query Cloudflare API v4 with generous 15s timeout
         $endpoints = [
             "https://api.cloudflare.com/client/v4/accounts/{$accountId}/cfd_tunnel/{$tunnelId}",
             "https://api.cloudflare.com/client/v4/accounts/{$accountId}/tunnels/{$tunnelId}"
         ];
 
         $tunnelData = null;
+        $apiCallSucceeded = false;
+
         foreach ($endpoints as $url) {
             $ch = curl_init($url);
             curl_setopt_array($ch, [
                 CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_TIMEOUT        => 8,
+                CURLOPT_TIMEOUT        => 15,
                 CURLOPT_HTTPHEADER     => [
                     "Authorization: Bearer {$apiToken}",
                     "Content-Type: application/json"
@@ -122,47 +143,21 @@ class ExternalStatusPlugin
                 $json = json_decode($response, true);
                 if (!empty($json['success']) && !empty($json['result'])) {
                     $tunnelData = $json['result'];
+                    $apiCallSucceeded = true;
                     break;
                 }
             }
         }
 
-        // 2. Fallback: List all active tunnels if direct match failed
-        if (!$tunnelData) {
-            $listUrl = "https://api.cloudflare.com/client/v4/accounts/{$accountId}/cfd_tunnel?is_deleted=false";
-            $ch = curl_init($listUrl);
-            curl_setopt_array($ch, [
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_TIMEOUT        => 8,
-                CURLOPT_HTTPHEADER     => [
-                    "Authorization: Bearer {$apiToken}",
-                    "Content-Type: application/json"
-                ]
-            ]);
-            $response = curl_exec($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
-
-            if ($httpCode === 200 && $response) {
-                $json = json_decode($response, true);
-                if (!empty($json['success']) && !empty($json['result']) && is_array($json['result'])) {
-                    foreach ($json['result'] as $t) {
-                        if (
-                            strcasecmp($t['id'] ?? '', $tunnelId) === 0 ||
-                            strcasecmp($t['name'] ?? '', $tunnelId) === 0
-                        ) {
-                            $tunnelData = $t;
-                            break;
-                        }
-                    }
-                    if (!$tunnelData && count($json['result']) === 1) {
-                        $tunnelData = $json['result'][0];
-                    }
-                }
+        // 4. Anti-Flapping Safeguard:
+        // If Cloudflare API timed out or had a glitch, do NOT falsely mark down! Keep previous status.
+        if (!$apiCallSucceeded) {
+            if ($existing) {
+                // Do not change status on API failure to prevent false alarms
+                return;
             }
-        }
-
-        if ($tunnelData) {
+            $status = 'operational'; // Default initial state if newly created
+        } else {
             $rawStatus = strtolower($tunnelData['status'] ?? 'down');
             $status = match ($rawStatus) {
                 'healthy', 'active', 'operational' => 'operational',
@@ -173,8 +168,6 @@ class ExternalStatusPlugin
             if (!empty($tunnelData['name']) && empty(setting('cf_tunnel_name'))) {
                 $customLabel = $tunnelData['name'];
             }
-        } else {
-            $status = 'down';
         }
 
         $this->upsertMonitor("Tunnel: {$customLabel}", $targetUrl, $status, $parentId, $isPrimary);
@@ -190,7 +183,7 @@ class ExternalStatusPlugin
 
     public function syncCloudflare(): string
     {
-        $opts = ['http' => ['timeout' => 10, 'user_agent' => 'MySystemStatus/1.0']];
+        $opts = ['http' => ['timeout' => 12, 'user_agent' => 'MySystemStatus/1.0']];
         $json = @file_get_contents('https://www.cloudflarestatus.com/api/v2/summary.json', false, stream_context_create($opts));
         if (!$json) return 'unknown';
 
@@ -248,7 +241,7 @@ class ExternalStatusPlugin
 
     public function syncAws(): string
     {
-        $opts = ['http' => ['timeout' => 8, 'user_agent' => 'MySystemStatus/1.0']];
+        $opts = ['http' => ['timeout' => 10, 'user_agent' => 'MySystemStatus/1.0']];
         $json = @file_get_contents('https://status.aws.amazon.com/data.json', false, stream_context_create($opts));
 
         $status = 'operational';
@@ -265,7 +258,7 @@ class ExternalStatusPlugin
 
     public function syncAzure(): string
     {
-        $opts = ['http' => ['timeout' => 8, 'user_agent' => 'MySystemStatus/1.0']];
+        $opts = ['http' => ['timeout' => 10, 'user_agent' => 'MySystemStatus/1.0']];
         $html = @file_get_contents('https://azure.status.microsoft/en-us/status', false, stream_context_create($opts));
 
         $status = 'operational';
@@ -279,7 +272,7 @@ class ExternalStatusPlugin
 
     public function syncPayPal(): string
     {
-        $opts = ['http' => ['timeout' => 8, 'user_agent' => 'MySystemStatus/1.0']];
+        $opts = ['http' => ['timeout' => 10, 'user_agent' => 'MySystemStatus/1.0']];
         $json = @file_get_contents('https://www.paypal-status.com/api/v1/components', false, stream_context_create($opts));
 
         $status = 'operational';
@@ -323,25 +316,25 @@ class ExternalStatusPlugin
         return $status;
     }
 
+    /**
+     * Update existing monitor or insert if forceInsert is true.
+     */
     private function upsertMonitor(string $name, string $target, string $status, ?int $parentId, int $isPrimary = 0): int
     {
-        $stmt = $this->db->prepare("SELECT id, is_active, interval_seconds FROM monitors WHERE target = ? LIMIT 1");
+        $stmt = $this->db->prepare("SELECT id FROM monitors WHERE target = ? LIMIT 1");
         $stmt->execute([$target]);
-        $existing = $stmt->fetch(PDO::FETCH_ASSOC);
+        $existingId = $stmt->fetchColumn();
 
-        if ($existing) {
-            $monitorId = (int)$existing['id'];
-            if ((int)$existing['is_active'] === 1) {
-                $update = $this->db->prepare("
-                    UPDATE monitors 
-                    SET name = ?, current_status = ?, last_check = NOW(), parent_id = ?, is_primary = ?, interval_seconds = COALESCE(interval_seconds, 60)
-                    WHERE id = ?
-                ");
-                $update->execute([$name, $status, $parentId, $isPrimary, $monitorId]);
+        if ($existingId) {
+            $monitorId = (int)$existingId;
+            $update = $this->db->prepare("
+                UPDATE monitors 
+                SET name = ?, current_status = ?, last_check = NOW(), parent_id = ?, is_primary = ?, is_active = 1, interval_seconds = COALESCE(interval_seconds, 60)
+                WHERE id = ?
+            ");
+            $update->execute([$name, $status, $parentId, $isPrimary, $monitorId]);
 
-                // Record check telemetry log for daily report calculations
-                $this->recordCheckLog($monitorId, $status);
-            }
+            $this->recordCheckLog($monitorId, $status);
             return $monitorId;
         }
 
@@ -361,26 +354,22 @@ class ExternalStatusPlugin
     }
 
     /**
-     * Record execution check entry into telemetry logs for daily summary calculation
+     * Fast single-query heartbeat check telemetry logger.
      */
     private function recordCheckLog(int $monitorId, string $status): void
     {
+        $shortStatus = ($status === 'operational') ? 'up' : (($status === 'degraded') ? 'degraded' : 'down');
+        $httpCode    = ($status === 'operational') ? 200 : (($status === 'degraded') ? 400 : 502);
+
         try {
             $stmt = $this->db->prepare("
-                INSERT INTO monitor_logs (monitor_id, status, response_time, checked_at) 
-                VALUES (?, ?, ?, NOW())
+                INSERT INTO monitor_logs (monitor_id, status, response_time_ms, http_code, error_message, created_at)
+                VALUES (?, ?, 0, ?, ?, NOW())
             ");
-            $stmt->execute([$monitorId, $status, 0]);
+            $err = ($status === 'operational') ? null : "Service reported {$status}";
+            $stmt->execute([$monitorId, $shortStatus, $httpCode, $err]);
         } catch (\Throwable $e) {
-            try {
-                $stmt = $this->db->prepare("
-                    INSERT INTO logs (monitor_id, type, message, status_code, created_at) 
-                    VALUES (?, 'check', ?, 200, NOW())
-                ");
-                $stmt->execute([$monitorId, $status]);
-            } catch (\Throwable $ex) {
-                // Silently ignore if logging tables differ
-            }
+            // Silently ignore if table format differs
         }
     }
 
