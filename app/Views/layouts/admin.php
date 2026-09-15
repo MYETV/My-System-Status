@@ -51,14 +51,19 @@ $userTz  = DateService::getActiveTimezone();
 
                 <!-- Language Switcher -->
                 <div class="dropdown">
-                    <button class="btn btn-sm btn-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                        <i class="bi bi-translate me-1"></i> <?= strtoupper(\App\Core\I18n::getLocale()) ?>
-                    </button>
-                    <ul class="dropdown-menu dropdown-menu-end shadow-sm">
-                        <li><a class="dropdown-item" href="/lang/switch?lang=en">English (EN)</a></li>
-                        <li><a class="dropdown-item" href="/lang/switch?lang=it">Italiano (IT)</a></li>
-                    </ul>
-                </div>
+    <button class="btn btn-sm btn-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+        <i class="bi bi-translate me-1"></i> <?= strtoupper(\App\Core\I18n::getLocale()) ?>
+    </button>
+    <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+        <?php foreach (SettingService::getEnabledLocales() as $code => $info): ?>
+            <li>
+                <a class="dropdown-item <?= \App\Core\I18n::getLocale() === $code ? 'active fw-bold' : '' ?>" href="/lang/switch?lang=<?= $code ?>">
+                    <?= htmlspecialchars($info['name']) ?> (<?= $info['flag'] ?>)
+                </a>
+            </li>
+        <?php endforeach; ?>
+    </ul>
+</div>
 
                 <!-- User Profile Link (Clickable with icon) -->
                 <a href="/admin/profile" class="btn btn-sm btn-outline-dark d-flex align-items-center gap-2 text-decoration-none" title="Edit Profile, Password & 2FA">
