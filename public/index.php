@@ -62,6 +62,9 @@ $router->post('/admin/api-keys/delete', [\App\Controllers\Admin\ApiKeyController
 // Public REST API Endpoints (Protected by API Key)
 $router->post('/api/v1/maintenance/enable', [\App\Controllers\Api\MaintenanceApiController::class, 'enable']);
 $router->post('/api/v1/maintenance/disable', [\App\Controllers\Api\MaintenanceApiController::class, 'disable']);
+// Dynamic Content Translations Endpoints
+$router->post('/admin/incidents/translate', [\App\Controllers\Admin\IncidentController::class, 'translate']);
+$router->post('/admin/maintenance/translate', [\App\Controllers\Admin\MaintenanceController::class, 'translate']);
 
 // ==========================================
 // AUTHENTICATION & 2FA ROUTES
