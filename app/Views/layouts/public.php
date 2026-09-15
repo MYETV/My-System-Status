@@ -110,14 +110,19 @@ $locale  = I18n::getLocale();
 
             <!-- Language Switcher -->
             <div class="dropdown">
-                <button class="btn btn-sm btn-outline-secondary dropdown-toggle text-uppercase" type="button" data-bs-toggle="dropdown">
-                    <i class="bi bi-translate me-1"></i><?= $locale ?>
-                </button>
-                <ul class="dropdown-menu dropdown-menu-end shadow-sm">
-                    <li><a class="dropdown-item <?= $locale === 'en' ? 'active' : '' ?>" href="/lang/switch?lang=en">English</a></li>
-                    <li><a class="dropdown-item <?= $locale === 'it' ? 'active' : '' ?>" href="/lang/switch?lang=it">Italiano</a></li>
-                </ul>
-            </div>
+    <button class="btn btn-sm btn-outline-secondary dropdown-toggle text-uppercase" type="button" data-bs-toggle="dropdown">
+        <i class="bi bi-translate me-1"></i><?= \App\Core\I18n::getLocale() ?>
+    </button>
+    <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+        <?php foreach (SettingService::getEnabledLocales() as $code => $info): ?>
+            <li>
+                <a class="dropdown-item <?= \App\Core\I18n::getLocale() === $code ? 'active fw-bold' : '' ?>" href="/lang/switch?lang=<?= $code ?>">
+                    <?= htmlspecialchars($info['name']) ?>
+                </a>
+            </li>
+        <?php endforeach; ?>
+    </ul>
+</div>
 
             <!-- Admin Login Link -->
             <a href="/admin" class="btn btn-sm btn-primary">
