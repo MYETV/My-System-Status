@@ -446,34 +446,55 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
     </form>
 </div>
 
-<!-- Modal: Sync Language JSONs via LibreTranslate (All 20 World Languages) -->
+<!-- Modal: Sync Language JSONs via LibreTranslate (Single or All Enabled Batch) -->
 <div class="modal fade" id="syncJsonModal" tabindex="-1">
     <div class="modal-dialog">
         <form action="/admin/translations/sync" method="POST" class="modal-content shadow">
             <div class="modal-header">
-                <h5 class="modal-title fw-bold"><i class="bi bi-translate me-2 text-primary"></i>Sync Language JSON File</h5>
+                <h5 class="modal-title fw-bold"><i class="bi bi-translate me-2 text-primary"></i>Sync Language JSON Files</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <div class="alert alert-info small mb-3">
                     <i class="bi bi-info-circle me-1"></i>
-                    This tool reads <code>languages/en.json</code>, identifies any missing keys in the target language file, translates them via your LibreTranslate server, and writes the updated <code>.json</code> file.
+                    This tool reads master keys from <code>languages/en.json</code>, identifies missing keys in the target file(s), translates them via LibreTranslate, and saves the updated <code>.json</code> file(s).
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label fw-semibold">Target Language to Generate/Sync</label>
+                    <label class="form-label fw-semibold">Target Translation Scope</label>
                     <select name="target_lang" class="form-select" required>
-                        <?php foreach ($allLanguages as $code => $info): ?>
-                            <?php if ($code === 'en') continue; ?>
-                            <option value="<?= $code ?>"><?= htmlspecialchars($info['name']) ?> (languages/<?= $code ?>.json)</option>
-                        <?php endforeach; ?>
+                        <!-- Batch Option at the Top -->
+                        <option value="all" class="fw-bold text-primary" selected>
+                            ★ All Enabled Languages (Batch Sync)
+                        </option>
+                        
+                        <optgroup label="Single Language Translation">
+                            <?php foreach ($allLanguages as $code => $info): ?>
+                                <?php if ($code === 'en') continue; ?>
+                                <option value="<?= $code ?>">
+                                    <?= htmlspecialchars($info['name']) ?> (languages/<?= $code ?>.json)
+                                </option>
+                            <?php endforeach; ?>
+                        </optgroup>
                     </select>
+                </div>
+
+                <div class="p-3 bg-light rounded-3 border small">
+                    <strong class="text-dark d-block mb-1">Currently Enabled Languages:</strong>
+                    <div class="d-flex flex-wrap gap-1">
+                        <?php foreach ($enabledLocales as $code): ?>
+                            <span class="badge bg-<?= $code === 'en' ? 'secondary' : 'primary' ?>">
+                                <?= strtoupper($code) ?>
+                            </span>
+                        <?php endforeach; ?>
+                    </div>
+                    <small class="text-muted d-block mt-2">Selecting "All Enabled Languages" will generate/sync all badges above except English.</small>
                 </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                 <button type="submit" class="btn btn-primary fw-semibold">
-                    <i class="bi bi-magic me-1"></i> Start JSON Auto-Translation
+                    <i class="bi bi-magic me-1"></i> Start Auto-Translation
                 </button>
             </div>
         </form>
