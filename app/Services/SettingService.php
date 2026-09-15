@@ -64,4 +64,36 @@ class SettingService
 
         return rtrim($protocol . $host, '/');
     }
+
+    /**
+     * Get array of enabled languages for header switcher dropdowns.
+     */
+    public static function getEnabledLocales(): array
+    {
+        $saved = self::get('enabled_locales', 'en,it');
+        $activeCodes = array_map('trim', explode(',', strtolower($saved)));
+
+        // English is the master language and is always enabled
+        if (!in_array('en', $activeCodes, true)) {
+            array_unshift($activeCodes, 'en');
+        }
+
+        $allSupported = [
+            'en' => ['name' => 'English',    'flag' => 'EN'],
+            'it' => ['name' => 'Italiano',   'flag' => 'IT'],
+            'es' => ['name' => 'Español',    'flag' => 'ES'],
+            'fr' => ['name' => 'Français',   'flag' => 'FR'],
+            'de' => ['name' => 'Deutsch',    'flag' => 'DE'],
+            'pt' => ['name' => 'Português',  'flag' => 'PT']
+        ];
+
+        $result = [];
+        foreach ($activeCodes as $code) {
+            if (isset($allSupported[$code])) {
+                $result[$code] = $allSupported[$code];
+            }
+        }
+
+        return $result;
+    }
 }
