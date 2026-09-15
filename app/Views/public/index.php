@@ -5,55 +5,86 @@ $allIncidents    = $allIncidents ?? [];
 $allMaintenances = $allMaintenances ?? [];
 ?>
 <style>
-    /* 90-Day Column with Event Arrows */
+    /* 100% Responsive 90-Day Uptime Graph */
     .uptime-graph {
         display: flex;
         gap: 2px;
         align-items: stretch;
-        height: 52px; /* Accommodates top arrow (9px), bar (34px), bottom arrow (9px) */
-        padding: 2px 0;
+        height: 48px;
+        padding: 6px 0;
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+        touch-action: pan-y;
     }
+    
+    /* Responsive gap on mobile screens */
+    @media (max-width: 576px) {
+        .uptime-graph {
+            gap: 1px;
+            height: 44px;
+            padding: 5px 0;
+        }
+    }
+
     .uptime-day-col {
         flex: 1 1 0;
+        min-width: 0; /* CRITICAL: allows flex items to shrink below content width! */
         display: flex;
         flex-direction: column;
-        align-items: center;
         justify-content: center;
+        align-items: center;
         height: 100%;
+        position: relative;
         cursor: pointer;
     }
-    .uptime-day-col:hover .uptime-bar {
-        filter: brightness(1.15);
-        transform: scaleY(1.08);
-    }
+
     .uptime-bar {
         width: 100%;
-        flex-grow: 1;
-        border-radius: 3px;
-        transition: transform 0.12s ease, opacity 0.12s ease;
+        height: 100%;
+        border-radius: 2px;
+        transition: transform 0.12s ease, filter 0.12s ease;
     }
-    /* Event Markers */
-    .uptime-marker-top {
-        height: 9px;
-        line-height: 9px;
-        font-size: 9px;
-        color: #0ea5e9; /* Azure Blue for Maintenances */
-        user-select: none;
+
+    .uptime-day-col:hover .uptime-bar,
+    .uptime-day-col:active .uptime-bar {
+        filter: brightness(1.2);
+        transform: scaleY(1.1);
+        z-index: 5;
     }
-    .uptime-marker-bottom {
-        height: 9px;
-        line-height: 9px;
-        font-size: 9px;
-        color: #ea580c; /* Dark Orange for Incidents */
-        user-select: none;
+
+    /* Top Arrow: Azure Blue for Scheduled Maintenances (Zero-width CSS Triangle) */
+    .uptime-day-col.has-maint::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 0;
+        height: 0;
+        border-left: 3px solid transparent;
+        border-right: 3px solid transparent;
+        border-top: 5px solid #0ea5e9;
+        z-index: 2;
     }
-    .uptime-marker-spacer {
-        height: 9px;
-        visibility: hidden;
+
+    /* Bottom Arrow: Dark Orange for Incidents (Zero-width CSS Triangle) */
+    .uptime-day-col.has-inc::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 0;
+        height: 0;
+        border-left: 3px solid transparent;
+        border-right: 3px solid transparent;
+        border-bottom: 5px solid #ea580c;
+        z-index: 2;
     }
 </style>
 
-<div class="container my-5" style="max-width: 900px;">
+<div class="container my-5 px-3 px-sm-4" style="max-width: 900px;">
     <!-- Feedback Alerts -->
     <?php if (isset($_GET['sub_success'])): ?>
         <div class="alert alert-success alert-dismissible fade show shadow-sm mb-4" role="alert">
@@ -98,7 +129,7 @@ $allMaintenances = $allMaintenances ?? [];
             default        => 'Operational'
         };
     ?>
-    <div class="p-4 rounded-3 text-white <?= $badgeClass ?> shadow-sm mb-4 d-flex justify-content-between align-items-center">
+    <div class="p-4 rounded-3 text-white <?= $badgeClass ?> shadow-sm mb-4 d-flex justify-content-between align-items-center flex-wrap gap-2">
         <h4 class="mb-0 fw-bold"><i class="bi bi-shield-fill-check me-2"></i> <?= $statusText ?></h4>
         <button class="btn btn-light btn-sm fw-bold shadow-sm d-flex align-items-center gap-1" 
                 type="button" 
@@ -111,7 +142,7 @@ $allMaintenances = $allMaintenances ?? [];
     <!-- Active Maintenances -->
     <?php if (!empty($maintenances)): ?>
         <div class="card border-info mb-4 shadow-sm">
-            <div class="card-header bg-info text-dark fw-bold d-flex justify-content-between align-items-center">
+            <div class="card-header bg-info text-dark fw-bold d-flex justify-content-between align-items-center flex-wrap gap-1">
                 <span><i class="bi bi-tools me-2"></i> <?= __('maintenance.title') ?></span>
                 <small class="badge bg-dark bg-opacity-25 text-white"><i class="bi bi-clock me-1"></i> <?= \App\Services\DateService::getActiveTimezone() ?></small>
             </div>
@@ -168,7 +199,7 @@ $allMaintenances = $allMaintenances ?? [];
         <?php endforeach; ?>
     <?php endif; ?>
 
-    <!-- Reusable Monitor Row Function with Arrow Indicators -->
+    <!-- Reusable Monitor Row Function -->
     <?php
     $renderMonitorRow = function(array $monitor) use ($uptimeHistory, $allIncidents, $allMaintenances) {
         $hasChildren = !empty($monitor['children']);
@@ -178,8 +209,8 @@ $allMaintenances = $allMaintenances ?? [];
         $mId         = (int)$monitor['id'];
         ob_start();
         ?>
-        <li class="list-group-item py-4">
-            <div class="d-flex justify-content-between align-items-center mb-2">
+        <li class="list-group-item py-4 px-2 px-sm-4">
+            <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
                 <div class="d-flex align-items-center gap-2 flex-wrap">
                     <span class="fw-bold fs-6 text-dark"><?= htmlspecialchars($monitor['name']) ?></span>
 
@@ -221,7 +252,7 @@ $allMaintenances = $allMaintenances ?? [];
                 </div>
             </div>
 
-            <!-- 90-Day Interactive Uptime Graph with Arrows -->
+            <!-- 90-Day Interactive Uptime Graph (100% Fit & No Overflow) -->
             <div class="uptime-graph" role="group" aria-label="90 Days Uptime History">
                 <?php
                     for ($day = 89; $day >= 0; $day--):
@@ -240,7 +271,7 @@ $allMaintenances = $allMaintenances ?? [];
                             ? round(($upChecks / $totalChecks) * 100, 2) 
                             : 100.00;
 
-                        // 1. Collect ALL Incidents on this day (Supports Multiple Incidents!)
+                        // 1. Collect ALL Incidents on this day
                         $dayIncidents = [];
                         foreach ($allIncidents as $inc) {
                             if (empty($inc['monitor_id']) || (int)$inc['monitor_id'] === $mId) {
@@ -252,7 +283,7 @@ $allMaintenances = $allMaintenances ?? [];
                             }
                         }
 
-                        // 2. Collect ALL Maintenances on this day (Supports Multiple Maintenances!)
+                        // 2. Collect ALL Maintenances on this day
                         $dayMaintenances = [];
                         foreach ($allMaintenances as $maint) {
                             if (empty($maint['monitor_id']) || (int)$maint['monitor_id'] === $mId) {
@@ -267,7 +298,7 @@ $allMaintenances = $allMaintenances ?? [];
                         $hasMaintenance = !empty($dayMaintenances);
                         $hasIncident    = !empty($dayIncidents);
 
-                        // BASE BAR HEALTH COLOR (Preserves Uptime & Gradients!)
+                        // Base Bar Color
                         if ($day === 0 && $isDown) {
                             $barClass = 'uptime-outage';
                             $barStyle = '';
@@ -292,7 +323,6 @@ $allMaintenances = $allMaintenances ?? [];
                             $statusDesc = "<span style='color: #10b981;'>●</span> Operational";
                         }
 
-                        // Build Rich Tooltip Label
                         $label = "<strong>{$formattedDate}</strong><br>{$statusDesc}";
                         if ($hasMaintenance) {
                             $label .= "<br><span style='color: #0ea5e9;'>▼</span> " . count($dayMaintenances) . " Maintenance event(s)";
@@ -301,7 +331,6 @@ $allMaintenances = $allMaintenances ?? [];
                             $label .= "<br><span style='color: #ea580c;'>▲</span> " . count($dayIncidents) . " Incident(s) reported";
                         }
 
-                        // Payload for the click-to-inspect daily modal (Includes ALL events)
                         $modalPayload = [
                             'date'          => $formattedDate,
                             'monitor'       => $monitor['name'],
@@ -329,32 +358,20 @@ $allMaintenances = $allMaintenances ?? [];
                                 'end_time'    => format_date($m['end_time'], 'M d, Y H:i T')
                             ], $dayMaintenances)
                         ];
+
+                        // Build CSS Classes for Markers
+                        $colClasses = 'uptime-day-col';
+                        if ($hasMaintenance) $colClasses .= ' has-maint';
+                        if ($hasIncident)    $colClasses .= ' has-inc';
                 ?>
-                    <div class="uptime-day-col" 
+                    <div class="<?= $colClasses ?>" 
                          data-bs-toggle="tooltip" 
                          data-bs-placement="top" 
                          data-bs-html="true" 
                          title="<?= htmlspecialchars($label, ENT_QUOTES) ?>"
                          data-day-payload='<?= htmlspecialchars(json_encode($modalPayload, JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES, 'UTF-8') ?>'
                          onclick="openDayDetailModalFromElement(this)">
-                        
-                        <!-- Top Arrow: Azure Blue for Scheduled Maintenances -->
-                        <?php if ($hasMaintenance): ?>
-                            <div class="uptime-marker-top" title="<?= count($dayMaintenances) ?> Maintenance(s)">▼</div>
-                        <?php else: ?>
-                            <div class="uptime-marker-spacer">&nbsp;</div>
-                        <?php endif; ?>
-
-                        <!-- Middle Bar: Retains True Uptime Health Color & Gradient -->
                         <div class="uptime-bar <?= $barClass ?>" <?= $barStyle ?>></div>
-
-                        <!-- Bottom Arrow: Dark Orange for Active/Reported Incidents -->
-                        <?php if ($hasIncident): ?>
-                            <div class="uptime-marker-bottom" title="<?= count($dayIncidents) ?> Incident(s)">▲</div>
-                        <?php else: ?>
-                            <div class="uptime-marker-spacer">&nbsp;</div>
-                        <?php endif; ?>
-
                     </div>
                 <?php endfor; ?>
             </div>
@@ -368,7 +385,7 @@ $allMaintenances = $allMaintenances ?? [];
             <!-- Sub-services Drawer -->
             <?php if ($hasChildren): ?>
                 <div class="collapse mt-3 pt-3 border-top" id="subservices-<?= $monitor['id'] ?>">
-                    <div class="ps-3 border-start border-3 border-primary-subtle d-flex flex-column gap-3">
+                    <div class="ps-2 ps-sm-3 border-start border-3 border-primary-subtle d-flex flex-column gap-3">
                         <?php foreach ($monitor['children'] as $child): ?>
                             <?php
                                 $childDown     = ($child['current_status'] === 'down');
@@ -377,7 +394,7 @@ $allMaintenances = $allMaintenances ?? [];
                                 $cId           = (int)$child['id'];
                             ?>
                             <div class="bg-light p-3 rounded-3 border">
-                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-1">
                                     <span class="fw-semibold text-dark small">
                                         <i class="bi bi-arrow-return-right me-1 text-muted"></i>
                                         <?= htmlspecialchars($child['name']) ?>
@@ -388,7 +405,7 @@ $allMaintenances = $allMaintenances ?? [];
                                 </div>
 
                                 <!-- Sub-service 90-Day Mini Bar -->
-                                <div class="uptime-graph" style="height: 18px;" role="group">
+                                <div class="uptime-graph" style="height: 20px;" role="group">
                                     <?php
                                         for ($cDay = 89; $cDay >= 0; $cDay--):
                                             $cDayTime  = strtotime("-{$cDay} days");
@@ -446,7 +463,7 @@ $allMaintenances = $allMaintenances ?? [];
     <!-- 2. PRIMARY CORE INFRASTRUCTURE SECTION -->
     <?php if (!empty($primaryMonitors)): ?>
         <div class="card shadow-sm border-0 mb-5">
-            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
                 <h5 class="mb-0 fw-bold"><i class="bi bi-hdd-rack text-primary me-2"></i>Core Infrastructure & Services</h5>
                 <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 px-2 py-1">
                     Primary Systems
@@ -490,7 +507,7 @@ $allMaintenances = $allMaintenances ?? [];
         </div>
 
         <div class="card shadow-sm border-0 mb-4">
-            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
                 <h5 class="mb-0 fw-bold"><i class="bi bi-cloud-check text-secondary me-2"></i>External Cloud & Third-Party Dependencies</h5>
                 <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 px-2 py-1">
                     External Dependencies
@@ -505,7 +522,7 @@ $allMaintenances = $allMaintenances ?? [];
     <?php endif; ?>
 </div>
 
-<!-- Modal 1: Daily History Inspector (Supports MULTIPLE Maintenances & Incidents!) -->
+<!-- Modal 1: Daily History Inspector -->
 <div class="modal fade" id="dayDetailModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content shadow">
@@ -664,7 +681,7 @@ function openDayDetailModalFromElement(el) {
 
         let hasAnyEvent = false;
 
-        // 1. Render ALL Maintenances on this Day (Supports Multiple Maintenances)
+        // 1. Render ALL Maintenances on this Day
         if (data.maintenances && data.maintenances.length > 0) {
             hasAnyEvent = true;
             let maintHtml = '';
@@ -692,7 +709,7 @@ function openDayDetailModalFromElement(el) {
             maintContainer.classList.add('d-none');
         }
 
-        // 2. Render ALL Incidents on this Day (Supports Multiple Incidents)
+        // 2. Render ALL Incidents on this Day
         if (data.incidents && data.incidents.length > 0) {
             hasAnyEvent = true;
             let incHtml = '';
@@ -740,7 +757,6 @@ function openDayDetailModalFromElement(el) {
             incContainer.classList.add('d-none');
         }
 
-        // 3. Show clean 100% operational message if no events occurred
         if (hasAnyEvent || data.outages > 0 || data.blackouts > 0) {
             cleanMsg.classList.add('d-none');
         } else {
