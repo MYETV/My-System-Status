@@ -162,6 +162,21 @@ $pdo->exec("
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ");
 
+// --- v1.0.35: Add translations_cache table for dynamic content caching ---
+$pdo->exec("
+    CREATE TABLE IF NOT EXISTS `translations_cache` (
+        `id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        `entity_type` VARCHAR(50) NOT NULL,
+        `entity_id` INT UNSIGNED NOT NULL,
+        `locale` VARCHAR(10) NOT NULL,
+        `field` VARCHAR(50) NOT NULL,
+        `content` TEXT NOT NULL,
+        `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY `uniq_translation` (`entity_type`, `entity_id`, `locale`, `field`),
+        INDEX `idx_lookup` (`entity_type`, `entity_id`, `locale`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+");
+
     if (php_sapi_name() === 'cli') {
         echo "Database schema is fully up to date.\n";
     }
