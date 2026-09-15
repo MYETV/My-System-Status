@@ -155,4 +155,16 @@ CREATE TABLE IF NOT EXISTS `api_keys` (
     INDEX `idx_key_hash` (`key_hash`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS `translations_cache` (
+    `id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    `entity_type` VARCHAR(50) NOT NULL,
+    `entity_id` INT UNSIGNED NOT NULL,
+    `locale` VARCHAR(10) NOT NULL,
+    `field` VARCHAR(50) NOT NULL,
+    `content` TEXT NOT NULL,
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY `uniq_translation` (`entity_type`, `entity_id`, `locale`, `field`),
+    INDEX `idx_lookup` (`entity_type`, `entity_id`, `locale`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 SET FOREIGN_KEY_CHECKS = 1;
