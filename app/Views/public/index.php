@@ -5,40 +5,42 @@ $allIncidents    = $allIncidents ?? [];
 $allMaintenances = $allMaintenances ?? [];
 ?>
 <style>
-    /* 100% Responsive 90-Day Uptime Graph */
+    /* 90-Day Uptime Graph Container */
     .uptime-graph {
         display: flex;
         gap: 2px;
         align-items: stretch;
-        height: 48px;
-        padding: 6px 0;
+        height: 56px; /* Total height: 11px top space + 34px bar + 11px bottom space */
         width: 100%;
         max-width: 100%;
         box-sizing: border-box;
+        overflow: visible;
         touch-action: pan-y;
     }
     
-    /* Responsive gap on mobile screens */
     @media (max-width: 576px) {
         .uptime-graph {
             gap: 1px;
-            height: 44px;
-            padding: 5px 0;
+            height: 50px;
         }
     }
 
+    /* Day Column with Reserved Space for Outside Arrows */
     .uptime-day-col {
         flex: 1 1 0;
-        min-width: 0; /* CRITICAL: allows flex items to shrink below content width! */
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
+        min-width: 0; /* Allows shrink without horizontal overflow */
         height: 100%;
         position: relative;
+        padding: 11px 0; /* CRITICAL: Reserves 11px on top and 11px on bottom strictly OUTSIDE the bar */
+        box-sizing: border-box;
+        display: flex;
+        align-items: center;
+        justify-content: center;
         cursor: pointer;
+        overflow: visible;
     }
 
+    /* The Middle Health Bar (Never overlapped by arrows!) */
     .uptime-bar {
         width: 100%;
         height: 100%;
@@ -49,38 +51,31 @@ $allMaintenances = $allMaintenances ?? [];
     .uptime-day-col:hover .uptime-bar,
     .uptime-day-col:active .uptime-bar {
         filter: brightness(1.2);
-        transform: scaleY(1.1);
+        transform: scaleY(1.12);
         z-index: 5;
     }
 
-    /* Top Arrow: Azure Blue for Scheduled Maintenances (Zero-width CSS Triangle) */
-    .uptime-day-col.has-maint::before {
-        content: '';
+    /* High-Definition SVG Markers Positioned Strictly Above and Below */
+    .uptime-arrow-top {
         position: absolute;
-        top: 0;
+        top: 1px;
         left: 50%;
         transform: translateX(-50%);
-        width: 0;
-        height: 0;
-        border-left: 3px solid transparent;
-        border-right: 3px solid transparent;
-        border-top: 5px solid #0ea5e9;
-        z-index: 2;
+        width: 8px;
+        height: 7px;
+        pointer-events: none;
+        z-index: 3;
     }
 
-    /* Bottom Arrow: Dark Orange for Incidents (Zero-width CSS Triangle) */
-    .uptime-day-col.has-inc::after {
-        content: '';
+    .uptime-arrow-bottom {
         position: absolute;
-        bottom: 0;
+        bottom: 1px;
         left: 50%;
         transform: translateX(-50%);
-        width: 0;
-        height: 0;
-        border-left: 3px solid transparent;
-        border-right: 3px solid transparent;
-        border-bottom: 5px solid #ea580c;
-        z-index: 2;
+        width: 8px;
+        height: 7px;
+        pointer-events: none;
+        z-index: 3;
     }
 </style>
 
@@ -252,7 +247,7 @@ $allMaintenances = $allMaintenances ?? [];
                 </div>
             </div>
 
-            <!-- 90-Day Interactive Uptime Graph (100% Fit & No Overflow) -->
+            <!-- 90-Day Interactive Uptime Graph with Outside Directional Arrows -->
             <div class="uptime-graph" role="group" aria-label="90 Days Uptime History">
                 <?php
                     for ($day = 89; $day >= 0; $day--):
@@ -298,7 +293,7 @@ $allMaintenances = $allMaintenances ?? [];
                         $hasMaintenance = !empty($dayMaintenances);
                         $hasIncident    = !empty($dayIncidents);
 
-                        // Base Bar Color
+                        // Base Bar Color (Preserves Uptime & Gradients)
                         if ($day === 0 && $isDown) {
                             $barClass = 'uptime-outage';
                             $barStyle = '';
@@ -325,7 +320,7 @@ $allMaintenances = $allMaintenances ?? [];
 
                         $label = "<strong>{$formattedDate}</strong><br>{$statusDesc}";
                         if ($hasMaintenance) {
-                            $label .= "<br><span style='color: #0ea5e9;'>▼</span> " . count($dayMaintenances) . " Maintenance event(s)";
+                            $label .= "<br><span style='color: #0ea5e9;'>▼</span> " . count($dayMaintenances) . " Scheduled Maintenance(s)";
                         }
                         if ($hasIncident) {
                             $label .= "<br><span style='color: #ea580c;'>▲</span> " . count($dayIncidents) . " Incident(s) reported";
@@ -358,20 +353,32 @@ $allMaintenances = $allMaintenances ?? [];
                                 'end_time'    => format_date($m['end_time'], 'M d, Y H:i T')
                             ], $dayMaintenances)
                         ];
-
-                        // Build CSS Classes for Markers
-                        $colClasses = 'uptime-day-col';
-                        if ($hasMaintenance) $colClasses .= ' has-maint';
-                        if ($hasIncident)    $colClasses .= ' has-inc';
                 ?>
-                    <div class="<?= $colClasses ?>" 
+                    <div class="uptime-day-col" 
                          data-bs-toggle="tooltip" 
                          data-bs-placement="top" 
                          data-bs-html="true" 
                          title="<?= htmlspecialchars($label, ENT_QUOTES) ?>"
                          data-day-payload='<?= htmlspecialchars(json_encode($modalPayload, JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES, 'UTF-8') ?>'
                          onclick="openDayDetailModalFromElement(this)">
+
+                        <!-- Top Marker: Sharp SVG Down-Arrow strictly ABOVE the bar -->
+                        <?php if ($hasMaintenance): ?>
+                            <svg class="uptime-arrow-top" viewBox="0 0 10 7">
+                                <polygon points="0,0 10,0 5,7" fill="#0ea5e9" />
+                            </svg>
+                        <?php endif; ?>
+
+                        <!-- Middle Bar: Clean Uptime Status (Never overlapped!) -->
                         <div class="uptime-bar <?= $barClass ?>" <?= $barStyle ?>></div>
+
+                        <!-- Bottom Marker: Sharp SVG Up-Arrow strictly BELOW the bar -->
+                        <?php if ($hasIncident): ?>
+                            <svg class="uptime-arrow-bottom" viewBox="0 0 10 7">
+                                <polygon points="5,0 10,7 0,7" fill="#ea580c" />
+                            </svg>
+                        <?php endif; ?>
+
                     </div>
                 <?php endfor; ?>
             </div>
@@ -522,7 +529,7 @@ $allMaintenances = $allMaintenances ?? [];
     <?php endif; ?>
 </div>
 
-<!-- Modal 1: Daily History Inspector -->
+<!-- Modal 1: Daily History Inspector (Supports MULTIPLE Maintenances & Incidents!) -->
 <div class="modal fade" id="dayDetailModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content shadow">
@@ -757,6 +764,7 @@ function openDayDetailModalFromElement(el) {
             incContainer.classList.add('d-none');
         }
 
+        // 3. Show clean 100% operational message if no events occurred
         if (hasAnyEvent || data.outages > 0 || data.blackouts > 0) {
             cleanMsg.classList.add('d-none');
         } else {
