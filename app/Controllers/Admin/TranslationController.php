@@ -17,7 +17,7 @@ class TranslationController
     }
 
     /**
-     * Translate or synchronize missing keys for an existing language.
+     * Translate a single language or batch translate all enabled languages.
      */
     public function sync(): void
     {
@@ -25,25 +25,64 @@ class TranslationController
         $endpoint   = setting('libretranslate_endpoint');
         $apiKey     = setting('libretranslate_api_key');
 
-        if (empty($endpoint)) {
-            header('Location: /admin/plugins?error=' . urlencode('LibreTranslate endpoint is not configured in Settings.'));
-            exit;
-        }
+        $referer = $_SERVER['HTTP_REFERER'] ?? '/admin/settings';
+        $cleanReferer = strtok($referer, '?');
 
-        if (empty($targetLang) || !preg_match('/^[a-z]{2}$/', $targetLang)) {
-            header('Location: /admin/plugins?error=invalid_language_code');
+        if (empty($endpoint)) {
+            header('Location: ' . $cleanReferer . '?error=' . urlencode('LibreTranslate endpoint is not configured in Settings.'));
             exit;
         }
 
         try {
             $service = new TranslationService($endpoint, $apiKey);
-            $result  = $service->syncAndTranslate($targetLang);
 
+            // =================================================================
+            // 1. BATCH SYNC: Translate ALL Enabled Languages at once
+            // =================================================================
+            if ($targetLang === 'all') {
+                $enabledLocales = array_keys(SettingService::getEnabledLocales());
+                // Filter out English source language
+                $localesToSync = array_values(array_filter($enabledLocales, fn($code) => $code !== 'en'));
+
+                if (empty($localesToSync)) {
+                    header('Location: ' . $cleanReferer . '?error=' . urlencode('No secondary languages are currently enabled in Settings.'));
+                    exit;
+                }
+
+                $totalTranslated = 0;
+                $syncedLanguages = [];
+
+                foreach ($localesToSync as $code) {
+                    $res = $service->syncAndTranslate($code);
+                    $totalTranslated += (int)($res['translated_keys'] ?? 0);
+                    $syncedLanguages[] = strtoupper($code);
+                }
+
+                $msg = sprintf(
+                    "Successfully synchronized all enabled languages (%s)! Total keys translated: %d.",
+                    implode(', ', $syncedLanguages),
+                    $totalTranslated
+                );
+
+                header('Location: ' . $cleanReferer . '?translated=1&msg=' . urlencode($msg));
+                exit;
+            }
+
+            // =================================================================
+            // 2. SINGLE LANGUAGE SYNC
+            // =================================================================
+            if (empty($targetLang) || !preg_match('/^[a-z]{2}$/', $targetLang)) {
+                header('Location: ' . $cleanReferer . '?error=' . urlencode('Invalid language code.'));
+                exit;
+            }
+
+            $result = $service->syncAndTranslate($targetLang);
             $msg = sprintf("Successfully translated %d missing keys into %s!", $result['translated_keys'], $result['file']);
-            header('Location: /admin/plugins?translated=1&msg=' . urlencode($msg));
+            header('Location: ' . $cleanReferer . '?translated=1&msg=' . urlencode($msg));
             exit;
+
         } catch (\Throwable $e) {
-            header('Location: /admin/plugins?error=' . urlencode($e->getMessage()));
+            header('Location: ' . $cleanReferer . '?error=' . urlencode($e->getMessage()));
             exit;
         }
     }
