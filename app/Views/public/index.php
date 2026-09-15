@@ -10,7 +10,7 @@ $allMaintenances = $allMaintenances ?? [];
         display: flex;
         gap: 2px;
         align-items: stretch;
-        height: 56px; /* 11px top arrow + 34px middle bar + 11px bottom arrow */
+        height: 56px;
         width: 100%;
         max-width: 100%;
         box-sizing: border-box;
@@ -25,13 +25,12 @@ $allMaintenances = $allMaintenances ?? [];
         }
     }
 
-    /* Day Column with Reserved Space for Outside Arrows */
     .uptime-day-col {
         flex: 1 1 0;
         min-width: 0;
         height: 100%;
         position: relative;
-        padding: 11px 0; /* Reserves space strictly outside the bar */
+        padding: 11px 0;
         box-sizing: border-box;
         display: flex;
         align-items: center;
@@ -40,7 +39,6 @@ $allMaintenances = $allMaintenances ?? [];
         overflow: visible;
     }
 
-    /* The Middle Health Bar */
     .uptime-bar {
         width: 100%;
         height: 100%;
@@ -55,7 +53,6 @@ $allMaintenances = $allMaintenances ?? [];
         z-index: 5;
     }
 
-    /* Directional SVG Markers Outside the Bar */
     .uptime-arrow-top {
         position: absolute;
         top: 1px;
@@ -118,19 +115,19 @@ $allMaintenances = $allMaintenances ?? [];
             default        => 'bg-secondary'
         };
         $statusText = match ($primaryStatus) {
-            'operational'  => 'All Core Systems Operational',
-            'degraded'     => 'Core Performance Degraded',
-            'major_outage' => 'Major Core Service Outage',
-            default        => 'Operational'
+            'operational'  => __('status.all_core_operational'),
+            'degraded'     => __('status.core_degraded'),
+            'major_outage' => __('status.core_outage'),
+            default        => __('status.operational')
         };
     ?>
     <div class="p-4 rounded-3 text-white <?= $badgeClass ?> shadow-sm mb-4 d-flex justify-content-between align-items-center flex-wrap gap-2">
         <h4 class="mb-0 fw-bold"><i class="bi bi-shield-fill-check me-2"></i> <?= $statusText ?></h4>
         <button class="btn btn-light btn-sm fw-bold shadow-sm d-flex align-items-center gap-1" 
                 type="button" 
-                onclick="openSubscriptionModal(null, 'All Core & Platform Services')">
+                onclick="openSubscriptionModal(null, '<?= htmlspecialchars(addslashes(__('public.all_core_services'))) ?>')">
             <i class="bi bi-bell-fill text-primary"></i> 
-            <span>Subscribe / Unsubscribe</span>
+            <span><?= __('public.subscribe_unsubscribe') ?></span>
         </button>
     </div>
 
@@ -161,7 +158,7 @@ $allMaintenances = $allMaintenances ?? [];
 
     <!-- Active Incidents -->
     <?php if (!empty($incidents)): ?>
-        <h5 class="fw-bold text-danger mb-3"><i class="bi bi-exclamation-triangle-fill me-2"></i> Active Incidents</h5>
+        <h5 class="fw-bold text-danger mb-3"><i class="bi bi-exclamation-triangle-fill me-2"></i> <?= __('public.active_incidents') ?></h5>
         <?php foreach ($incidents as $incident): ?>
             <div class="card border-danger mb-3 shadow-sm">
                 <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
@@ -215,7 +212,7 @@ $allMaintenances = $allMaintenances ?? [];
                             type="button" 
                             onclick="openSubscriptionModal(<?= $monitor['id'] ?>, '<?= htmlspecialchars(addslashes($monitor['name'])) ?>')">
                         <i class="bi bi-bell"></i>
-                        <span>Subscribe / Unsubscribe</span>
+                        <span><?= __('public.subscribe_unsubscribe') ?></span>
                     </button>
                     
                     <!-- Sub-services Accordion Toggle Badge -->
@@ -225,7 +222,7 @@ $allMaintenances = $allMaintenances ?? [];
                                 type="button" 
                                 data-bs-toggle="collapse" 
                                 data-bs-target="#subservices-<?= $monitor['id'] ?>">
-                            <i class="bi bi-diagram-3 me-1"></i> <?= count($monitor['children']) ?> sub-services <i class="bi bi-chevron-down ms-1"></i>
+                            <i class="bi bi-diagram-3 me-1"></i> <?= count($monitor['children']) ?> <?= __('public.sub_services') ?> <i class="bi bi-chevron-down ms-1"></i>
                         </button>
                     <?php endif; ?>
                 </div>
@@ -233,21 +230,21 @@ $allMaintenances = $allMaintenances ?? [];
                 <div class="d-flex align-items-center gap-2">
                     <?php if ($monitor['current_status'] === 'operational'): ?>
                         <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-2 py-1">
-                            <i class="bi bi-check-circle-fill me-1"></i> Operational
+                            <i class="bi bi-check-circle-fill me-1"></i> <?= __('status.operational') ?>
                         </span>
                     <?php elseif ($monitor['current_status'] === 'degraded'): ?>
                         <span class="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25 px-2 py-1">
-                            <i class="bi bi-exclamation-triangle-fill me-1"></i> Degraded
+                            <i class="bi bi-exclamation-triangle-fill me-1"></i> <?= __('status.degraded') ?>
                         </span>
                     <?php else: ?>
                         <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 px-2 py-1">
-                            <i class="bi bi-x-circle-fill me-1"></i> Major Outage
+                            <i class="bi bi-x-circle-fill me-1"></i> <?= __('status.major_outage') ?>
                         </span>
                     <?php endif; ?>
                 </div>
             </div>
 
-            <!-- 90-Day Interactive Uptime Graph with Bi-directional Gradients -->
+            <!-- 90-Day Interactive Uptime Graph -->
             <div class="uptime-graph" role="group" aria-label="90 Days Uptime History">
                 <?php
                     for ($day = 89; $day >= 0; $day--):
@@ -262,12 +259,11 @@ $allMaintenances = $allMaintenances ?? [];
                         $blackChecks = (int)($dayData['blackout'] ?? 0);
                         $upChecks    = (int)($dayData['up'] ?? max(0, $totalChecks - $downChecks - $blackChecks));
 
-                        // Actual Percentages for this specific day
                         $blackPct = ($totalChecks > 0) ? round(($blackChecks / $totalChecks) * 100, 1) : 0;
                         $downPct  = ($totalChecks > 0) ? round(($downChecks / $totalChecks) * 100, 1) : 0;
                         $dailyUptimePct = ($totalChecks > 0) ? round(($upChecks / $totalChecks) * 100, 2) : 100.00;
 
-                        // Collect Incidents and Maintenances for markers
+                        // Collect Incidents and Maintenances
                         $dayIncidents = [];
                         foreach ($allIncidents as $inc) {
                             if (empty($inc['monitor_id']) || (int)$inc['monitor_id'] === $mId) {
@@ -293,16 +289,13 @@ $allMaintenances = $allMaintenances ?? [];
                         $hasMaintenance = !empty($dayMaintenances);
                         $hasIncident    = !empty($dayIncidents);
 
-                        // DYNAMIC COLOR & BI-DIRECTIONAL GRADIENT LOGIC
                         $barClass = 'uptime-bar';
                         $barStyle = '';
 
                         if ($day === 0 && $isDown) {
-                            // Active Down today: pure red
                             $barClass .= ' uptime-outage';
-                            $statusDesc = "<span style='color: #ef4444;'>●</span> Major Outage (Active Down)";
+                            $statusDesc = "<span style='color: #ef4444;'>●</span> " . __('status.major_outage');
                         } elseif ($blackChecks > 0 && $downChecks > 0) {
-                            // Tri-gradient: Black from TOP, Green in MIDDLE, Red from BOTTOM!
                             $vBlack = max(15, min(40, (int)$blackPct));
                             $vRed   = max(15, min(40, (int)$downPct));
                             $gStart = $vBlack;
@@ -310,37 +303,35 @@ $allMaintenances = $allMaintenances ?? [];
                             $barStyle = "style=\"background: linear-gradient(to bottom, #0f172a 0%, #0f172a {$gStart}%, #10b981 {$gStart}%, #10b981 {$gEnd}%, #ef4444 {$gEnd}%, #ef4444 100%);\"";
                             $statusDesc = "<span style='color: #0f172a;'>⬛</span> Blackout: {$blackPct}% &bull; <span style='color: #ef4444;'>●</span> Downtime: {$downPct}%";
                         } elseif ($blackChecks > 0) {
-                            // BLACK DESCENDS FROM TOP DOWN!
                             if ($blackPct >= 95.0) {
                                 $barStyle = 'style="background-color: #0f172a;"';
                             } else {
                                 $vBlack = max(15, min(85, (int)$blackPct));
                                 $barStyle = "style=\"background: linear-gradient(to bottom, #0f172a 0%, #0f172a {$vBlack}%, #10b981 {$vBlack}%, #10b981 100%);\"";
                             }
-                            $statusDesc = "<span style='color: #0f172a;'>⬛</span> System Blackout: {$blackPct}% ({$dailyUptimePct}% Operational)";
+                            $statusDesc = "<span style='color: #0f172a;'>⬛</span> " . __('public.system_blackout') . ": {$blackPct}%";
                         } elseif ($downChecks > 0) {
-                            // RED RISES FROM BOTTOM UP!
                             if ($downPct >= 95.0) {
                                 $barStyle = 'style="background-color: #ef4444;"';
                             } else {
                                 $vRed = max(15, min(85, (int)$downPct));
                                 $barStyle = "style=\"background: linear-gradient(to top, #ef4444 0%, #ef4444 {$vRed}%, #10b981 {$vRed}%, #10b981 100%);\"";
                             }
-                            $statusDesc = "<span style='color: #ef4444;'>●</span> Downtime: {$downPct}% ({$dailyUptimePct}% Operational)";
+                            $statusDesc = "<span style='color: #ef4444;'>●</span> Downtime: {$downPct}% ({$dailyUptimePct}% " . __('public.uptime') . ")";
                         } elseif ($totalChecks > 0) {
                             $barStyle = 'style="background-color: #10b981;"';
-                            $statusDesc = "<span style='color: #10b981;'>●</span> 100% Operational";
+                            $statusDesc = "<span style='color: #10b981;'>●</span> 100% " . __('status.operational');
                         } else {
                             $barStyle = 'style="background-color: #10b981;"';
-                            $statusDesc = "<span style='color: #10b981;'>●</span> Operational";
+                            $statusDesc = "<span style='color: #10b981;'>●</span> " . __('status.operational');
                         }
 
                         $label = "<strong>{$formattedDate}</strong><br>{$statusDesc}";
                         if ($hasMaintenance) {
-                            $label .= "<br><span style='color: #0ea5e9;'>▼</span> " . count($dayMaintenances) . " Scheduled Maintenance(s)";
+                            $label .= "<br><span style='color: #0ea5e9;'>▼</span> " . count($dayMaintenances) . " " . __('maintenance.title');
                         }
                         if ($hasIncident) {
-                            $label .= "<br><span style='color: #ea580c;'>▲</span> " . count($dayIncidents) . " Incident(s) reported";
+                            $label .= "<br><span style='color: #ea580c;'>▲</span> " . count($dayIncidents) . " " . __('public.reported_incident');
                         }
 
                         $modalPayload = [
@@ -383,17 +374,14 @@ $allMaintenances = $allMaintenances ?? [];
                          data-day-payload='<?= htmlspecialchars(json_encode($modalPayload, JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES, 'UTF-8') ?>'
                          onclick="openDayDetailModalFromElement(this)">
 
-                        <!-- Top Marker: Sharp SVG Down-Arrow (Maintenance) -->
                         <?php if ($hasMaintenance): ?>
                             <svg class="uptime-arrow-top" viewBox="0 0 10 7">
                                 <polygon points="0,0 10,0 5,7" fill="#0ea5e9" />
                             </svg>
                         <?php endif; ?>
 
-                        <!-- Middle Bar: True Uptime with Bi-directional Gradients -->
                         <div class="<?= $barClass ?>" <?= $barStyle ?>></div>
 
-                        <!-- Bottom Marker: Sharp SVG Up-Arrow (Incident) -->
                         <?php if ($hasIncident): ?>
                             <svg class="uptime-arrow-bottom" viewBox="0 0 10 7">
                                 <polygon points="5,0 10,7 0,7" fill="#ea580c" />
@@ -405,12 +393,12 @@ $allMaintenances = $allMaintenances ?? [];
             </div>
 
             <div class="d-flex justify-content-between text-muted small mt-2">
-                <span>90 days ago</span>
-                <span class="fw-semibold text-dark"><?= number_format($uptimePct, 2) ?>% uptime</span>
-                <span>Today</span>
+                <span><?= __('public.days_ago', ['count' => 90]) ?></span>
+                <span class="fw-semibold text-dark"><?= number_format($uptimePct, 2) ?>% <?= __('public.uptime') ?></span>
+                <span><?= __('public.today') ?></span>
             </div>
 
-            <!-- Sub-services Drawer with Bi-directional Gradients -->
+            <!-- Sub-services Drawer -->
             <?php if ($hasChildren): ?>
                 <div class="collapse mt-3 pt-3 border-top" id="subservices-<?= $monitor['id'] ?>">
                     <div class="ps-2 ps-sm-3 border-start border-3 border-primary-subtle d-flex flex-column gap-3">
@@ -451,7 +439,7 @@ $allMaintenances = $allMaintenances ?? [];
 
                                             if ($cDay === 0 && $childDown) {
                                                 $cStyle = 'style="background-color: #ef4444;"';
-                                                $cLabel .= "<span style='color: #ef4444;'>●</span> Outage";
+                                                $cLabel .= "<span style='color: #ef4444;'>●</span> " . __('status.major_outage');
                                             } elseif ($cBlack > 0 && $cTotal > 0) {
                                                 $cBlackPct = round(($cBlack / $cTotal) * 100);
                                                 if ($cBlackPct >= 95) {
@@ -460,7 +448,7 @@ $allMaintenances = $allMaintenances ?? [];
                                                     $vBlack = max(15, min(85, $cBlackPct));
                                                     $cStyle = "style=\"background: linear-gradient(to bottom, #0f172a 0%, #0f172a {$vBlack}%, #10b981 {$vBlack}%, #10b981 100%);\"";
                                                 }
-                                                $cLabel .= "<span style='color: #0f172a;'>⬛</span> Blackout: {$cBlackPct}%";
+                                                $cLabel .= "<span style='color: #0f172a;'>⬛</span> " . __('public.system_blackout') . ": {$cBlackPct}%";
                                             } elseif ($cDown > 0 && $cTotal > 0) {
                                                 $cDownPct = round(($cDown / $cTotal) * 100);
                                                 if ($cDownPct >= 95) {
@@ -472,7 +460,7 @@ $allMaintenances = $allMaintenances ?? [];
                                                 $cLabel .= "<span style='color: #ef4444;'>●</span> Downtime: {$cDownPct}%";
                                             } else {
                                                 $cStyle = 'style="background-color: #10b981;"';
-                                                $cLabel .= "<span style='color: #10b981;'>●</span> Operational";
+                                                $cLabel .= "<span style='color: #10b981;'>●</span> " . __('status.operational');
                                             }
                                     ?>
                                         <div class="uptime-bar" 
@@ -502,9 +490,9 @@ $allMaintenances = $allMaintenances ?? [];
     <?php if (!empty($primaryMonitors)): ?>
         <div class="card shadow-sm border-0 mb-5">
             <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
-                <h5 class="mb-0 fw-bold"><i class="bi bi-hdd-rack text-primary me-2"></i>Core Infrastructure & Services</h5>
+                <h5 class="mb-0 fw-bold"><i class="bi bi-hdd-rack text-primary me-2"></i><?= __('public.core_infrastructure') ?></h5>
                 <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 px-2 py-1">
-                    Primary Systems
+                    <?= __('public.primary_systems') ?>
                 </span>
             </div>
             <ul class="list-group list-group-flush">
@@ -531,24 +519,24 @@ $allMaintenances = $allMaintenances ?? [];
                 default        => 'bi-info-circle-fill'
             };
             $secStatusMessage = match ($secondaryStatus) {
-                'operational'  => 'All third-party cloud dependencies and external APIs are operating normally.',
-                'degraded'     => 'Some external third-party services are currently reporting degraded performance.',
-                'major_outage' => 'Outage detected across external cloud providers.',
-                default        => 'External dependencies status'
+                'operational'  => __('status.secondary_normal'),
+                'degraded'     => __('status.secondary_degraded'),
+                'major_outage' => __('status.secondary_outage'),
+                default        => __('public.external_dependencies')
             };
         ?>
         <div class="alert <?= $secBannerColor ?> shadow-sm mb-3 d-flex align-items-center gap-2 py-3 px-4 rounded-3">
             <i class="bi <?= $secBannerIcon ?> fs-4"></i>
             <div>
-                <strong>Third-Party Dependencies Status:</strong> <?= $secStatusMessage ?>
+                <strong><?= __('public.third_party_status') ?>:</strong> <?= $secStatusMessage ?>
             </div>
         </div>
 
         <div class="card shadow-sm border-0 mb-4">
             <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
-                <h5 class="mb-0 fw-bold"><i class="bi bi-cloud-check text-secondary me-2"></i>External Cloud & Third-Party Dependencies</h5>
+                <h5 class="mb-0 fw-bold"><i class="bi bi-cloud-check text-secondary me-2"></i><?= __('public.external_cloud') ?></h5>
                 <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 px-2 py-1">
-                    External Dependencies
+                    <?= __('public.external_dependencies') ?>
                 </span>
             </div>
             <ul class="list-group list-group-flush">
@@ -556,6 +544,15 @@ $allMaintenances = $allMaintenances ?? [];
                     <?= $renderMonitorRow($monitor) ?>
                 <?php endforeach; ?>
             </ul>
+        </div>
+    <?php endif; ?>
+
+    <!-- Fallback if no monitors exist -->
+    <?php if (empty($primaryMonitors) && empty($secondaryMonitors)): ?>
+        <div class="card shadow-sm border-0 p-5 text-center text-muted mb-4">
+            <i class="bi bi-hdd-network fs-1 mb-2 text-secondary"></i>
+            <h5><?= __('public.no_services') ?></h5>
+            <p class="small mb-0"><?= __('public.no_services_desc') ?></p>
         </div>
     <?php endif; ?>
 </div>
@@ -566,7 +563,7 @@ $allMaintenances = $allMaintenances ?? [];
         <div class="modal-content shadow">
             <div class="modal-header">
                 <div>
-                    <h5 class="modal-title fw-bold text-dark" id="dayModalDateTitle">Daily Report</h5>
+                    <h5 class="modal-title fw-bold text-dark" id="dayModalDateTitle"><?= __('public.daily_report') ?></h5>
                     <small class="text-muted" id="dayModalMonitorName">Service Name</small>
                 </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -576,47 +573,47 @@ $allMaintenances = $allMaintenances ?? [];
                 <div class="row g-2 mb-4 text-center">
                     <div class="col-3">
                         <div class="p-2 bg-light rounded border">
-                            <div class="small text-muted">Daily Uptime</div>
+                            <div class="small text-muted"><?= __('public.daily_uptime') ?></div>
                             <h5 class="fw-bold mb-0 text-success" id="dayModalUptimePct">100%</h5>
                         </div>
                     </div>
                     <div class="col-3">
                         <div class="p-2 bg-light rounded border">
-                            <div class="small text-muted">Checks Executed</div>
+                            <div class="small text-muted"><?= __('public.checks_executed') ?></div>
                             <h5 class="fw-bold mb-0 text-dark" id="dayModalChecksCount">0</h5>
                         </div>
                     </div>
                     <div class="col-3">
                         <div class="p-2 bg-light rounded border">
-                            <div class="small text-muted">Downtime Hits</div>
+                            <div class="small text-muted"><?= __('public.downtime_hits') ?></div>
                             <h5 class="fw-bold mb-0 text-danger" id="dayModalOutagesCount">0</h5>
                         </div>
                     </div>
                     <div class="col-3">
                         <div class="p-2 bg-light rounded border">
-                            <div class="small text-muted">System Blackouts</div>
+                            <div class="small text-muted"><?= __('public.system_blackouts') ?></div>
                             <h5 class="fw-bold mb-0 text-dark" id="dayModalBlackoutsCount">0</h5>
                         </div>
                     </div>
                 </div>
 
-                <!-- Multiple Maintenances Container (Azure Blue ▼) -->
+                <!-- Multiple Maintenances Container -->
                 <div id="dayModalMaintenancesList" class="d-none mb-3"></div>
 
-                <!-- Multiple Incidents Container (Dark Orange ▲) -->
+                <!-- Multiple Incidents Container -->
                 <div id="dayModalIncidentsList" class="d-none mb-3"></div>
 
                 <!-- 100% Operational Clean Box -->
                 <div id="dayModalCleanMsg" class="alert alert-success d-flex align-items-center gap-2 mb-0">
                     <i class="bi bi-check-circle-fill fs-3 text-success"></i>
                     <div>
-                        <strong>100% Operational</strong>
-                        <div class="small">All systems operated normally with zero disruptions, incidents, or maintenance recorded on this day.</div>
+                        <strong>100% <?= __('status.operational') ?></strong>
+                        <div class="small"><?= __('public.operational_clean') ?></div>
                     </div>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('common.close') ?></button>
             </div>
         </div>
     </div>
@@ -630,12 +627,12 @@ $allMaintenances = $allMaintenances ?? [];
                 <ul class="nav nav-pills card-header-pills w-100" role="tablist">
                     <li class="nav-item flex-fill text-center">
                         <button class="nav-link active w-100 fw-bold" data-bs-toggle="pill" data-bs-target="#tabSubscribe" type="button">
-                            <i class="bi bi-bell me-1"></i> Subscribe
+                            <i class="bi bi-bell me-1"></i> <?= __('public.subscribe') ?>
                         </button>
                     </li>
                     <li class="nav-item flex-fill text-center">
                         <button class="nav-link w-100 fw-bold text-danger" data-bs-toggle="pill" data-bs-target="#tabUnsubscribe" type="button">
-                            <i class="bi bi-bell-slash me-1"></i> Unsubscribe
+                            <i class="bi bi-bell-slash me-1"></i> <?= __('public.unsubscribe') ?>
                         </button>
                     </li>
                 </ul>
@@ -649,19 +646,20 @@ $allMaintenances = $allMaintenances ?? [];
                         <input type="hidden" name="monitor_id" id="modalMonitorId" value="">
                         
                         <div class="mb-3">
-                            <label class="form-label text-muted small mb-1">Target Service:</label>
+                            <label class="form-label text-muted small mb-1"><?= __('public.target_service') ?>:</label>
                             <div class="p-2 bg-light rounded-3 border fw-bold text-dark small d-flex align-items-center gap-2" id="modalTargetServiceName">
-                                <i class="bi bi-hdd-network text-primary"></i> All Core & Platform Services
+                                <i class="bi bi-hdd-network text-primary"></i> <?= __('public.all_core_services') ?>
                             </div>
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label fw-semibold">Your Email Address</label>
+                            <label class="form-label fw-semibold"><?= __('public.email_address') ?></label>
                             <input type="email" name="email" class="form-control" placeholder="you@example.com" required>
+                            <div class="text-muted small mt-1"><?= __('public.subscribe_verification_note') ?></div>
                         </div>
 
                         <button type="submit" class="btn btn-primary w-100 py-2 fw-bold">
-                            <i class="bi bi-check2-circle me-1"></i> Confirm & Subscribe
+                            <i class="bi bi-check2-circle me-1"></i> <?= __('public.confirm_subscribe') ?>
                         </button>
                     </form>
                 </div>
@@ -671,16 +669,16 @@ $allMaintenances = $allMaintenances ?? [];
                     <form action="/subscribe/request-unsubscribe" method="POST">
                         <div class="alert alert-light border small text-muted mb-3">
                             <i class="bi bi-shield-lock text-danger me-1"></i>
-                            Enter your email below to receive a secure <strong>one-click confirmation link valid for 60 minutes</strong> to remove all your subscriptions.
+                            <?= __('public.unsubscribe_info') ?>
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label fw-semibold">Your Registered Email</label>
+                            <label class="form-label fw-semibold"><?= __('public.email_address') ?></label>
                             <input type="email" name="email" class="form-control" placeholder="you@example.com" required>
                         </div>
 
                         <button type="submit" class="btn btn-danger w-100 py-2 fw-bold">
-                            <i class="bi bi-envelope-x me-1"></i> Send Unsubscribe Link
+                            <i class="bi bi-envelope-x me-1"></i> <?= __('public.send_unsubscribe_link') ?>
                         </button>
                     </form>
                 </div>
@@ -697,7 +695,7 @@ function openDayDetailModalFromElement(el) {
     try {
         const data = JSON.parse(rawData);
 
-        document.getElementById('dayModalDateTitle').textContent = 'Daily Report: ' + data.date;
+        document.getElementById('dayModalDateTitle').textContent = '<?= addslashes(__('public.daily_report')) ?>: ' + data.date;
         document.getElementById('dayModalMonitorName').textContent = data.monitor;
         document.getElementById('dayModalChecksCount').textContent = data.checks;
         document.getElementById('dayModalOutagesCount').textContent = data.outages;
@@ -727,14 +725,14 @@ function openDayDetailModalFromElement(el) {
                 maintHtml += `
                     <div class="card border-info mb-3 shadow-sm">
                         <div class="card-header bg-info bg-opacity-25 py-2 d-flex justify-content-between align-items-center">
-                            <span class="fw-bold text-dark"><i class="bi bi-tools text-info me-1"></i> Scheduled Maintenance</span>
+                            <span class="fw-bold text-dark"><i class="bi bi-tools text-info me-1"></i> <?= addslashes(__('maintenance.title')) ?></span>
                             <span class="badge bg-info text-dark">${m.status}</span>
                         </div>
                         <div class="card-body">
                             <h6 class="fw-bold mb-2 text-dark">${m.title}</h6>
-                            <p class="small text-muted mb-2">${m.description || 'No description provided.'}</p>
+                            <p class="small text-muted mb-2">${m.description || '<?= addslashes(__('common.description')) ?>'}</p>
                             <div class="p-2 bg-light rounded border small text-dark">
-                                <i class="bi bi-clock me-1 text-primary"></i> <strong>Window:</strong> ${m.start_time} — ${m.end_time}
+                                <i class="bi bi-clock me-1 text-primary"></i> <strong><?= addslashes(__('public.window')) ?>:</strong> ${m.start_time} — ${m.end_time}
                             </div>
                         </div>
                     </div>
@@ -763,14 +761,11 @@ function openDayDetailModalFromElement(el) {
                             </div>
                         `;
                     });
-                } else {
-                    timelineHtml = '<small class="text-muted">No timeline notes posted.</small>';
                 }
-
                 incHtml += `
                     <div class="card border-warning mb-3 shadow-sm">
                         <div class="card-header bg-warning bg-opacity-25 py-2 d-flex justify-content-between align-items-center">
-                            <span class="fw-bold text-dark"><i class="bi bi-exclamation-triangle-fill text-warning me-1"></i> Reported Incident</span>
+                            <span class="fw-bold text-dark"><i class="bi bi-exclamation-triangle-fill text-warning me-1"></i> <?= addslashes(__('public.reported_incident')) ?></span>
                             <div class="d-flex gap-1">
                                 <span class="badge bg-danger">${inc.impact}</span>
                                 <span class="badge bg-dark">${inc.status}</span>
@@ -779,10 +774,10 @@ function openDayDetailModalFromElement(el) {
                         <div class="card-body">
                             <h6 class="fw-bold mb-2 text-dark">${inc.title}</h6>
                             <div class="small text-muted mb-3">
-                                <i class="bi bi-calendar-event me-1"></i> <strong>Opened:</strong> ${inc.created_at} &bull; 
-                                <i class="bi bi-clock-history me-1"></i> <strong>Updated:</strong> ${inc.updated_at}
+                                <i class="bi bi-calendar-event me-1"></i> <strong><?= addslashes(__('public.opened')) ?>:</strong> ${inc.created_at} &bull; 
+                                <i class="bi bi-clock-history me-1"></i> <strong><?= addslashes(__('public.updated')) ?>:</strong> ${inc.updated_at}
                             </div>
-                            <h6 class="fw-bold small text-secondary mb-2">Chronological Updates:</h6>
+                            <h6 class="fw-bold small text-secondary mb-2"><?= addslashes(__('public.chronological_updates')) ?>:</h6>
                             <div class="timeline ps-3 border-start">${timelineHtml}</div>
                         </div>
                     </div>
@@ -795,7 +790,6 @@ function openDayDetailModalFromElement(el) {
             incContainer.classList.add('d-none');
         }
 
-        // 3. Show clean 100% operational message if no events occurred
         if (hasAnyEvent || data.outages > 0 || data.blackouts > 0) {
             cleanMsg.classList.add('d-none');
         } else {
