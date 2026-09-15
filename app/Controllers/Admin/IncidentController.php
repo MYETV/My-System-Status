@@ -8,6 +8,7 @@ use App\Core\View;
 use App\Services\AiService;
 use App\Services\SettingService;
 use App\Services\MailerService;
+use App\Services\ContentTranslationService;
 use PDO;
 
 class IncidentController
@@ -111,7 +112,6 @@ class IncidentController
         $message    = trim($_POST['message'] ?? '');
 
         if ($incidentId > 0 && $message) {
-            // Fetch existing incident details to retrieve title and monitor_id
             $stmtInc = $this->db->prepare("SELECT title, monitor_id, impact FROM incidents WHERE id = ? LIMIT 1");
             $stmtInc->execute([$incidentId]);
             $incident = $stmtInc->fetch(PDO::FETCH_ASSOC);
@@ -125,6 +125,9 @@ class IncidentController
                     VALUES (?, ?, ?)
                 ");
                 $stmtUpdate->execute([$incidentId, $status, $message]);
+
+                // Clear cached translations so fresh status/message is reflected
+                (new ContentTranslationService())->clearCache('incident', $incidentId);
 
                 // Notify subscribers about the incident progress/resolution update
                 $monitorId = $incident['monitor_id'] ? (int)$incident['monitor_id'] : null;
@@ -154,6 +157,9 @@ class IncidentController
                 WHERE id = ?
             ");
             $stmt->execute([$title, $monitorId, $impact, $aiSummary, $incidentId]);
+
+            // Reset translation cache when title, impact or AI summary are edited
+            (new ContentTranslationService())->clearCache('incident', $incidentId);
         }
 
         header('Location: /admin/incidents?edited=1');
@@ -166,9 +172,53 @@ class IncidentController
         if ($incidentId > 0) {
             $stmt = $this->db->prepare("DELETE FROM incidents WHERE id = ?");
             $stmt->execute([$incidentId]);
+
+            // Purge cached translations
+            (new ContentTranslationService())->clearCache('incident', $incidentId);
         }
 
         header('Location: /admin/incidents?deleted=1');
+        exit;
+    }
+
+    /**
+     * Translate incident title and AI summary on demand with LibreTranslate and cache it.
+     */
+    public function translate(): void
+    {
+        header('Content-Type: application/json');
+        $incidentId = (int)($_POST['incident_id'] ?? 0);
+        $targetLang = trim($_POST['target_lang'] ?? 'it');
+
+        if ($incidentId <= 0) {
+            echo json_encode(['success' => false, 'error' => 'Invalid incident ID']);
+            exit;
+        }
+
+        $stmt = $this->db->prepare("SELECT title, ai_summary FROM incidents WHERE id = ? LIMIT 1");
+        $stmt->execute([$incidentId]);
+        $inc = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$inc) {
+            echo json_encode(['success' => false, 'error' => 'Incident not found']);
+            exit;
+        }
+
+        $service = new ContentTranslationService();
+        if (!$service->isConfigured()) {
+            echo json_encode(['success' => false, 'error' => 'LibreTranslate endpoint is not configured in Settings']);
+            exit;
+        }
+
+        $transTitle = $service->getOrTranslate('incident', $incidentId, 'title', $inc['title'], $targetLang);
+        $transAi    = !empty($inc['ai_summary']) ? $service->getOrTranslate('incident', $incidentId, 'ai_summary', $inc['ai_summary'], $targetLang) : '';
+
+        echo json_encode([
+            'success'          => true,
+            'target_lang'      => $targetLang,
+            'translated_title' => $transTitle,
+            'translated_ai'    => $transAi
+        ]);
         exit;
     }
 
@@ -200,10 +250,9 @@ class IncidentController
     {
         $smtpHost = setting('smtp_host', '');
         if (empty($smtpHost)) {
-            return; // SMTP is disabled or not configured
+            return;
         }
 
-        // 1. Resolve affected service name
         $serviceName = 'All Services (Global)';
         if ($monitorId !== null) {
             $stmtM = $this->db->prepare("SELECT name FROM monitors WHERE id = ? LIMIT 1");
@@ -214,7 +263,6 @@ class IncidentController
             }
         }
 
-        // 2. Query verified subscribers (Global feed OR specifically targeting this monitor)
         if ($monitorId !== null) {
             $stmtSub = $this->db->prepare("
                 SELECT DISTINCT email, token 
@@ -235,7 +283,6 @@ class IncidentController
             return;
         }
 
-        // 3. Configure Mailer
         $smtpConfig = [
             'host'       => $smtpHost,
             'port'       => setting('smtp_port', '587'),
@@ -254,7 +301,6 @@ class IncidentController
         $subjectPrefix = $isUpdate ? "[UPDATE]" : "[INCIDENT]";
         $subject = "{$subjectPrefix} {$title} - {$appName}";
 
-        // 4. Dispatch email to each subscriber
         foreach ($subscribers as $sub) {
             $unsubUrl = $appUrl . "/subscribe/confirm-unsubscribe?token=" . urlencode($sub['token']);
 
@@ -289,9 +335,7 @@ class IncidentController
 
             try {
                 $mailer->send($sub['email'], $subject, $htmlBody);
-            } catch (\Throwable $e) {
-                // Silently continue to next subscriber if individual email fails
-            }
+            } catch (\Throwable $e) {}
         }
     }
 }
