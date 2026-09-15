@@ -6,6 +6,7 @@ namespace App\Controllers\Admin;
 use App\Core\Database;
 use App\Core\View;
 use App\Services\MailerService;
+use App\Services\ContentTranslationService;
 use PDO;
 
 class MaintenanceController
@@ -134,6 +135,9 @@ class MaintenanceController
             ");
             $stmt->execute([$title, $monitorId, $description, $start, $end, $status, $id]);
 
+            // Clear cached translations for this maintenance window
+            (new ContentTranslationService())->clearCache('maintenance', $id);
+
             // Notify verified subscribers about the maintenance update/completion
             $this->sendMaintenanceEmailNotifications($title, $monitorId, $description, $start, $end, $status, true);
         }
@@ -148,9 +152,53 @@ class MaintenanceController
         if ($id > 0) {
             $stmt = $this->db->prepare("DELETE FROM maintenances WHERE id = ?");
             $stmt->execute([$id]);
+
+            // Purge cached translations
+            (new ContentTranslationService())->clearCache('maintenance', $id);
         }
 
         header('Location: /admin/maintenance?deleted=1');
+        exit;
+    }
+
+    /**
+     * Translate maintenance title and description on demand with LibreTranslate and cache it.
+     */
+    public function translate(): void
+    {
+        header('Content-Type: application/json');
+        $maintenanceId = (int)($_POST['maintenance_id'] ?? 0);
+        $targetLang    = trim($_POST['target_lang'] ?? 'it');
+
+        if ($maintenanceId <= 0) {
+            echo json_encode(['success' => false, 'error' => 'Invalid maintenance ID']);
+            exit;
+        }
+
+        $stmt = $this->db->prepare("SELECT title, description FROM maintenances WHERE id = ? LIMIT 1");
+        $stmt->execute([$maintenanceId]);
+        $maint = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$maint) {
+            echo json_encode(['success' => false, 'error' => 'Maintenance not found']);
+            exit;
+        }
+
+        $service = new ContentTranslationService();
+        if (!$service->isConfigured()) {
+            echo json_encode(['success' => false, 'error' => 'LibreTranslate endpoint is not configured in Settings']);
+            exit;
+        }
+
+        $transTitle = $service->getOrTranslate('maintenance', $maintenanceId, 'title', $maint['title'], $targetLang);
+        $transDesc  = !empty($maint['description']) ? $service->getOrTranslate('maintenance', $maintenanceId, 'description', $maint['description'], $targetLang) : '';
+
+        echo json_encode([
+            'success'                => true,
+            'target_lang'            => $targetLang,
+            'translated_title'       => $transTitle,
+            'translated_description' => $transDesc
+        ]);
         exit;
     }
 
@@ -161,10 +209,9 @@ class MaintenanceController
     {
         $smtpHost = setting('smtp_host', '');
         if (empty($smtpHost)) {
-            return; // SMTP disabled
+            return;
         }
 
-        // 1. Resolve affected service name
         $serviceName = 'All Services (Global)';
         if ($monitorId !== null) {
             $stmtM = $this->db->prepare("SELECT name FROM monitors WHERE id = ? LIMIT 1");
@@ -175,7 +222,6 @@ class MaintenanceController
             }
         }
 
-        // 2. Fetch subscribers (Global OR specific monitor)
         if ($monitorId !== null) {
             $stmtSub = $this->db->prepare("
                 SELECT DISTINCT email, token 
@@ -196,7 +242,6 @@ class MaintenanceController
             return;
         }
 
-        // 3. Configure Mailer
         $smtpConfig = [
             'host'       => $smtpHost,
             'port'       => setting('smtp_port', '587'),
@@ -218,7 +263,6 @@ class MaintenanceController
         $formattedStart = date('M d, Y H:i', strtotime($start));
         $formattedEnd   = date('M d, Y H:i T', strtotime($end));
 
-        // 4. Dispatch email to each subscriber
         foreach ($subscribers as $sub) {
             $unsubUrl = $appUrl . "/subscribe/confirm-unsubscribe?token=" . urlencode($sub['token']);
 
@@ -255,9 +299,7 @@ class MaintenanceController
 
             try {
                 $mailer->send($sub['email'], $subject, $htmlBody);
-            } catch (\Throwable $e) {
-                // Continue sending to remaining subscribers
-            }
+            } catch (\Throwable $e) {}
         }
     }
 }
