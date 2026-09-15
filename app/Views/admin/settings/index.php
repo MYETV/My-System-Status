@@ -5,6 +5,7 @@ use App\Services\DateService;
 
 $currentTimezone = setting('app_timezone', 'UTC');
 $allTimezones    = DateService::getTimezonesList();
+$allLanguages    = SettingService::getAllLanguages();
 $enabledLocales  = array_keys(SettingService::getEnabledLocales());
 ?>
 <div class="container-fluid py-4">
@@ -91,61 +92,61 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
                         <small class="text-muted">Fallback timezone when browser auto-detection is not active.</small>
                     </div>
 
-                    <!-- Supported Languages Selection (20 World Languages) -->
-<div class="col-md-6">
-    <label class="form-label fw-semibold">Enabled Header Languages (Choose active languages)</label>
-    <div class="p-3 bg-light rounded-3 border" style="max-height: 220px; overflow-y: auto;">
-        <div class="row g-2">
-            <?php foreach (SettingService::getAllLanguages() as $code => $info): ?>
-                <div class="col-6 col-md-4">
-                    <div class="form-check">
-                        <input class="form-check-input" 
-                               type="checkbox" 
-                               name="enabled_locales[]" 
-                               value="<?= $code ?>" 
-                               id="lang_<?= $code ?>" 
-                               <?= $code === 'en' ? 'checked disabled' : (in_array($code, $enabledLocales, true) ? 'checked' : '') ?>>
-                        <label class="form-check-label small fw-semibold text-truncate" for="lang_<?= $code ?>" title="<?= htmlspecialchars($info['name']) ?>">
-                            <?= htmlspecialchars($info['name']) ?> (<?= $info['flag'] ?>)
-                        </label>
+                    <!-- Supported Languages in Header Selection (20 World Languages) -->
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Enabled Header Languages</label>
+                        <div class="p-3 bg-light rounded-3 border" style="max-height: 220px; overflow-y: auto;">
+                            <div class="row g-2">
+                                <?php foreach ($allLanguages as $code => $info): ?>
+                                    <div class="col-6 col-md-4">
+                                        <div class="form-check">
+                                            <input class="form-check-input" 
+                                                   type="checkbox" 
+                                                   name="enabled_locales[]" 
+                                                   value="<?= $code ?>" 
+                                                   id="lang_<?= $code ?>" 
+                                                   <?= $code === 'en' ? 'checked disabled' : (in_array($code, $enabledLocales, true) ? 'checked' : '') ?>>
+                                            <label class="form-check-label small fw-semibold text-truncate" for="lang_<?= $code ?>" title="<?= htmlspecialchars($info['name']) ?>">
+                                                <?= htmlspecialchars($info['name']) ?> (<?= $info['flag'] ?>)
+                                            </label>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                        <small class="text-muted d-block mt-1">Select which languages will appear in the navigation header switchers.</small>
                     </div>
-                </div>
-            <?php endforeach; ?>
-        </div>
-    </div>
-    <small class="text-muted d-block mt-1">Check the languages you want to expose in public and admin headers.</small>
-</div>
 
-<!-- LibreTranslate Configuration & Auto-Sync Section -->
-<div class="col-12 mt-4">
-    <div class="p-4 bg-light rounded-3 border">
-        <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
-            <div class="d-flex align-items-center gap-2">
-                <span class="p-2 bg-warning bg-opacity-10 text-dark rounded-3 fs-4">
-                    <i class="bi bi-translate"></i>
-                </span>
-                <div>
-                    <h5 class="fw-bold mb-0">LibreTranslate Language Files Generator</h5>
-                    <p class="text-muted small mb-0">Auto-translate missing keys from <code>languages/en.json</code> into other language JSON files.</p>
-                </div>
-            </div>
-            <button type="button" class="btn btn-sm btn-primary fw-semibold" data-bs-toggle="modal" data-bs-target="#syncJsonModal">
-                <i class="bi bi-magic me-1"></i> Auto-Translate JSON Files
-            </button>
-        </div>
+                    <!-- LibreTranslate Configuration & Auto-Sync Section -->
+                    <div class="col-12 mt-4">
+                        <div class="p-4 bg-light rounded-3 border">
+                            <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="p-2 bg-warning bg-opacity-10 text-dark rounded-3 fs-4">
+                                        <i class="bi bi-translate"></i>
+                                    </span>
+                                    <div>
+                                        <h5 class="fw-bold mb-0">LibreTranslate Language Files Generator</h5>
+                                        <p class="text-muted small mb-0">Auto-translate missing keys from <code>languages/en.json</code> into other language JSON files.</p>
+                                    </div>
+                                </div>
+                                <button type="button" class="btn btn-sm btn-primary fw-semibold" data-bs-toggle="modal" data-bs-target="#syncJsonModal">
+                                    <i class="bi bi-magic me-1"></i> Auto-Translate JSON Files
+                                </button>
+                            </div>
 
-        <div class="row g-3">
-            <div class="col-md-6">
-                <label class="form-label fw-semibold">LibreTranslate API Endpoint</label>
-                <input type="url" name="libretranslate_endpoint" value="<?= htmlspecialchars(setting('libretranslate_endpoint', '')) ?>" class="form-control" placeholder="http://192.168.x.x:5055/translate (leave empty if disabled)">
-            </div>
-            <div class="col-md-6">
-                <label class="form-label fw-semibold">LibreTranslate API Key (Optional)</label>
-                <input type="password" name="libretranslate_api_key" value="<?= htmlspecialchars(setting('libretranslate_api_key', '')) ?>" class="form-control" placeholder="Leave blank if self-hosted without key">
-            </div>
-        </div>
-    </div>
-</div>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold">LibreTranslate API Endpoint</label>
+                                    <input type="url" name="libretranslate_endpoint" value="<?= htmlspecialchars(setting('libretranslate_endpoint', '')) ?>" class="form-control" placeholder="http://192.168.x.x:5055/translate (leave empty if disabled)">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold">LibreTranslate API Key (Optional)</label>
+                                    <input type="password" name="libretranslate_api_key" value="<?= htmlspecialchars(setting('libretranslate_api_key', '')) ?>" class="form-control" placeholder="Leave blank if self-hosted without key">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -225,7 +226,7 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
                         <label class="form-label fw-semibold">Encryption Protocol</label>
                         <select name="smtp_encryption" class="form-select">
                             <option value="starttls" <?= setting('smtp_encryption', 'starttls') === 'starttls' ? 'selected' : '' ?>>STARTTLS (Default Port 587)</option>
-                            <option value="ssl" <?= setting('smtp_encryption', 'ssl') === 'ssl' ? 'selected' : '' ?>>SSL / TLS (Port 465)</option>
+                            <option value="ssl" <?= setting('smtp_encryption') === 'ssl' ? 'selected' : '' ?>>SSL / TLS (Port 465)</option>
                             <option value="none" <?= setting('smtp_encryption') === 'none' ? 'selected' : '' ?>>None (Plain Port 25)</option>
                         </select>
                     </div>
@@ -388,6 +389,39 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
                         </div>
                     </div>
 
+                    <!-- Step-by-Step Setup Guide Accordion -->
+                    <div class="alert alert-info border-info-subtle mb-3 p-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <strong class="text-dark small"><i class="bi bi-info-circle me-1 text-primary"></i> How to setup your Cloudflare Worker:</strong>
+                            <button class="btn btn-sm btn-link p-0 text-decoration-none small fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#workerGuideCollapse">
+                                Show Setup Guide <i class="bi bi-chevron-down ms-1"></i>
+                            </button>
+                        </div>
+                        <div class="collapse mt-3 pt-2 border-top border-info-subtle small text-dark" id="workerGuideCollapse">
+                            <ol class="ps-3 mb-2">
+                                <li class="mb-1">
+                                    <strong>Get the template code:</strong> Open the local file <code>edge/cloudflare-worker.js</code> in your repository.
+                                </li>
+                                <li class="mb-1">
+                                    <strong>Create the Worker:</strong> In <a href="https://dash.cloudflare.com" target="_blank" class="text-primary fw-semibold">Cloudflare Dashboard</a> &rarr; <em>Workers & Pages</em> &rarr; <em>Create Application</em> &rarr; <em>Create Worker</em>, and paste the code from <code>edge/cloudflare-worker.js</code>.
+                                </li>
+                                <li class="mb-1">
+                                    <strong>Configure Variables (Worker Settings &rarr; Variables):</strong>
+                                    <ul class="mt-1 ps-3 text-muted">
+                                        <li><code>SHARED_SECRET_TOKEN</code>: A custom password/token (must match the token entered below).</li>
+                                        <li><code>ORIGIN_STATUS_URL</code>: Your status page URL (<code><?= htmlspecialchars(app_url()) ?></code>).</li>
+                                        <li><code>DISCORD_WEBHOOK_URL</code>: <em>(Optional)</em> Discord webhook for alerts if your origin server dies.</li>
+                                    </ul>
+                                </li>
+                                <li class="mb-1">
+                                    <strong>Enable Cron Trigger (Worker Settings &rarr; Triggers &rarr; Cron Triggers):</strong> Add <code>* * * * *</code> (every minute) so Cloudflare monitors your server even if your VPS crashes.</li>
+                                <li>
+                                    <strong>Paste URL & Token below:</strong> Copy your <code>https://your-worker.workers.dev</code> address into the field below.
+                                </li>
+                            </ol>
+                        </div>
+                    </div>
+
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">Worker URL</label>
@@ -412,7 +446,7 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
     </form>
 </div>
 
-<!-- Modal: Sync Language JSONs via LibreTranslate -->
+<!-- Modal: Sync Language JSONs via LibreTranslate (All 20 World Languages) -->
 <div class="modal fade" id="syncJsonModal" tabindex="-1">
     <div class="modal-dialog">
         <form action="/admin/translations/sync" method="POST" class="modal-content shadow">
@@ -429,11 +463,10 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
                 <div class="mb-3">
                     <label class="form-label fw-semibold">Target Language to Generate/Sync</label>
                     <select name="target_lang" class="form-select" required>
-                        <option value="it">Italiano (languages/it.json)</option>
-                        <option value="es">Español (languages/es.json)</option>
-                        <option value="fr">Français (languages/fr.json)</option>
-                        <option value="de">Deutsch (languages/de.json)</option>
-                        <option value="pt">Português (languages/pt.json)</option>
+                        <?php foreach ($allLanguages as $code => $info): ?>
+                            <?php if ($code === 'en') continue; ?>
+                            <option value="<?= $code ?>"><?= htmlspecialchars($info['name']) ?> (languages/<?= $code ?>.json)</option>
+                        <?php endforeach; ?>
                     </select>
                 </div>
             </div>
