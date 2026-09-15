@@ -8,6 +8,7 @@ use App\Core\View;
 use App\Services\MailerService;
 use App\Services\SubscriberService;
 use App\Services\SettingService;
+use App\Services\ContentTranslationService;
 use PDO;
 
 class StatusPageController
@@ -148,6 +149,58 @@ class StatusPageController
             WHERE start_time >= DATE_SUB(NOW(), INTERVAL 90 DAY) OR end_time >= DATE_SUB(NOW(), INTERVAL 90 DAY)
         ");
         $allMaintenances = $maintStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // 8. Dynamic Content Translation & Cache (for non-English visitors)
+        $currentLocale = \App\Core\I18n::getLocale();
+        if ($currentLocale !== 'en') {
+            $transService = new ContentTranslationService();
+
+            if ($transService->isConfigured()) {
+                // Translate Active Maintenances
+                foreach ($maintenances as &$maint) {
+                    $maint['title'] = $transService->getOrTranslate('maintenance', (int)$maint['id'], 'title', $maint['title'], $currentLocale);
+                    if (!empty($maint['description'])) {
+                        $maint['description'] = $transService->getOrTranslate('maintenance', (int)$maint['id'], 'description', $maint['description'], $currentLocale);
+                    }
+                }
+                unset($maint);
+
+                // Translate All Historical Maintenances (for modal inspection)
+                foreach ($allMaintenances as &$maint) {
+                    $maint['title'] = $transService->getOrTranslate('maintenance', (int)$maint['id'], 'title', $maint['title'], $currentLocale);
+                    if (!empty($maint['description'])) {
+                        $maint['description'] = $transService->getOrTranslate('maintenance', (int)$maint['id'], 'description', $maint['description'], $currentLocale);
+                    }
+                }
+                unset($maint);
+
+                // Translate Active Incidents
+                foreach ($incidents as &$inc) {
+                    $inc['title'] = $transService->getOrTranslate('incident', (int)$inc['id'], 'title', $inc['title'], $currentLocale);
+                    if (!empty($inc['ai_summary'])) {
+                        $inc['ai_summary'] = $transService->getOrTranslate('incident', (int)$inc['id'], 'ai_summary', $inc['ai_summary'], $currentLocale);
+                    }
+                    foreach ($inc['updates'] as &$up) {
+                        $up['message'] = $transService->getOrTranslate('incident_update', (int)($up['id'] ?? $inc['id']), 'message', $up['message'], $currentLocale);
+                    }
+                    unset($up);
+                }
+                unset($inc);
+
+                // Translate All Historical Incidents (for modal inspection)
+                foreach ($allIncidents as &$inc) {
+                    $inc['title'] = $transService->getOrTranslate('incident', (int)$inc['id'], 'title', $inc['title'], $currentLocale);
+                    if (!empty($inc['ai_summary'])) {
+                        $inc['ai_summary'] = $transService->getOrTranslate('incident', (int)$inc['id'], 'ai_summary', $inc['ai_summary'], $currentLocale);
+                    }
+                    foreach ($inc['updates'] as &$up) {
+                        $up['message'] = $transService->getOrTranslate('incident_update', (int)($up['id'] ?? $inc['id']), 'message', $up['message'], $currentLocale);
+                    }
+                    unset($up);
+                }
+                unset($inc);
+            }
+        }
 
         View::render('public/index', [
             'monitors'          => $monitors,
