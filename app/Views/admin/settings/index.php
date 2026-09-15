@@ -5,6 +5,7 @@ use App\Services\DateService;
 
 $currentTimezone = setting('app_timezone', 'UTC');
 $allTimezones    = DateService::getTimezonesList();
+$enabledLocales  = array_keys(SettingService::getEnabledLocales());
 ?>
 <div class="container-fluid py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
@@ -17,6 +18,13 @@ $allTimezones    = DateService::getTimezonesList();
     <?php if (isset($_GET['saved'])): ?>
         <div class="alert alert-success alert-dismissible fade show shadow-sm" role="alert">
             <i class="bi bi-check-circle-fill me-2"></i> Settings have been successfully saved to the database!
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    <?php endif; ?>
+
+    <?php if (isset($_GET['translated'])): ?>
+        <div class="alert alert-success alert-dismissible fade show shadow-sm" role="alert">
+            <i class="bi bi-check-circle-fill me-2"></i> <?= htmlspecialchars($_GET['msg'] ?? 'Translation completed!') ?>
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
     <?php endif; ?>
@@ -82,13 +90,82 @@ $allTimezones    = DateService::getTimezonesList();
                         </select>
                         <small class="text-muted">Fallback timezone when browser auto-detection is not active.</small>
                     </div>
+
+                    <!-- Supported Languages in Header Selection -->
                     <div class="col-md-6">
-                        <label class="form-label fw-semibold">LibreTranslate API Endpoint</label>
-                        <input type="url" name="libretranslate_endpoint" value="<?= htmlspecialchars(setting('libretranslate_endpoint', '')) ?>" class="form-control" placeholder="https://translate.example.com (leave empty if disabled)">
+                        <label class="form-label fw-semibold">Enabled Header Languages</label>
+                        <div class="p-3 bg-light rounded-3 border">
+                            <div class="row g-2">
+                                <div class="col-6 col-md-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="enabled_locales[]" value="en" id="langEn" checked disabled>
+                                        <label class="form-check-label small fw-semibold" for="langEn">English (EN)</label>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="enabled_locales[]" value="it" id="langIt" <?= in_array('it', $enabledLocales, true) ? 'checked' : '' ?>>
+                                        <label class="form-check-label small fw-semibold" for="langIt">Italiano (IT)</label>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="enabled_locales[]" value="es" id="langEs" <?= in_array('es', $enabledLocales, true) ? 'checked' : '' ?>>
+                                        <label class="form-check-label small fw-semibold" for="langEs">Español (ES)</label>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="enabled_locales[]" value="fr" id="langFr" <?= in_array('fr', $enabledLocales, true) ? 'checked' : '' ?>>
+                                        <label class="form-check-label small fw-semibold" for="langFr">Français (FR)</label>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="enabled_locales[]" value="de" id="langDe" <?= in_array('de', $enabledLocales, true) ? 'checked' : '' ?>>
+                                        <label class="form-check-label small fw-semibold" for="langDe">Deutsch (DE)</label>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="enabled_locales[]" value="pt" id="langPt" <?= in_array('pt', $enabledLocales, true) ? 'checked' : '' ?>>
+                                        <label class="form-check-label small fw-semibold" for="langPt">Português (PT)</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <small class="text-muted d-block mt-2">Only checked languages will be selectable in the navigation headers.</small>
+                        </div>
                     </div>
-                    <div class="col-md-12">
-                        <label class="form-label fw-semibold">LibreTranslate API Key (Optional)</label>
-                        <input type="password" name="libretranslate_api_key" value="<?= htmlspecialchars(setting('libretranslate_api_key', '')) ?>" class="form-control" placeholder="Optional API Key">
+
+                    <!-- LibreTranslate Configuration & Auto-Sync Section -->
+                    <div class="col-12 mt-4">
+                        <div class="p-4 bg-light rounded-3 border">
+                            <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="p-2 bg-warning bg-opacity-10 text-dark rounded-3 fs-4">
+                                        <i class="bi bi-translate"></i>
+                                    </span>
+                                    <div>
+                                        <h5 class="fw-bold mb-0">LibreTranslate Language Files Generator</h5>
+                                        <p class="text-muted small mb-0">Auto-translate missing keys from <code>languages/en.json</code> into other language files.</p>
+                                    </div>
+                                </div>
+                                <button type="button" class="btn btn-sm btn-primary fw-semibold" data-bs-toggle="modal" data-bs-target="#syncJsonModal">
+                                    <i class="bi bi-magic me-1"></i> Auto-Translate JSON Files
+                                </button>
+                            </div>
+
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold">LibreTranslate API Endpoint</label>
+                                    <input type="url" name="libretranslate_endpoint" value="<?= htmlspecialchars(setting('libretranslate_endpoint', '')) ?>" class="form-control" placeholder="http://192.168.x.x:5055/translate (leave empty if disabled)">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold">LibreTranslate API Key (Optional)</label>
+                                    <input type="password" name="libretranslate_api_key" value="<?= htmlspecialchars(setting('libretranslate_api_key', '')) ?>" class="form-control" placeholder="Leave blank if self-hosted without key">
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -169,7 +246,7 @@ $allTimezones    = DateService::getTimezonesList();
                         <label class="form-label fw-semibold">Encryption Protocol</label>
                         <select name="smtp_encryption" class="form-select">
                             <option value="starttls" <?= setting('smtp_encryption', 'starttls') === 'starttls' ? 'selected' : '' ?>>STARTTLS (Default Port 587)</option>
-                            <option value="ssl" <?= setting('smtp_encryption') === 'ssl' ? 'selected' : '' ?>>SSL / TLS (Port 465)</option>
+                            <option value="ssl" <?= setting('smtp_encryption', 'ssl') === 'ssl' ? 'selected' : '' ?>>SSL / TLS (Port 465)</option>
                             <option value="none" <?= setting('smtp_encryption') === 'none' ? 'selected' : '' ?>>None (Plain Port 25)</option>
                         </select>
                     </div>
@@ -251,7 +328,7 @@ $allTimezones    = DateService::getTimezonesList();
                         <label class="form-label fw-semibold">AI Provider Engine</label>
                         <select name="ai_provider" class="form-select">
                             <option value="gemini" <?= setting('ai_provider', 'gemini') === 'gemini' ? 'selected' : '' ?>>Google Gemini API</option>
-                            <option value="ollama" <?= setting('ai_provider') === 'ollama' ? 'selected' : '' ?>>Ollama (Local / Self-Hosted)</option>
+                            <option value="ollama" <?= setting('ai_provider', 'gemini') === 'ollama' ? 'selected' : '' ?>>Ollama (Local / Self-Hosted)</option>
                         </select>
                     </div>
                     <div class="col-md-8">
@@ -277,107 +354,74 @@ $allTimezones    = DateService::getTimezonesList();
                     <small class="text-muted">Probes will post down/up alert embeds directly to this Discord channel.</small>
                 </div>
 
+                <!-- Cloudflare Zero Trust Tunnel Section -->
                 <div class="p-4 bg-light rounded-3 border mb-4">
-    <div class="d-flex align-items-center justify-content-between mb-2">
-        <div class="d-flex align-items-center gap-2">
-            <span class="p-2 bg-warning bg-opacity-10 text-dark rounded-3 fs-4">
-                <i class="bi bi-shield-shaded"></i>
-            </span>
-            <div>
-                <h5 class="fw-bold mb-0">Cloudflare Zero Trust Tunnel Monitor (Optional)</h5>
-                <p class="text-muted small mb-0">Monitor the live health status of your private Cloudflare Tunnel (cloudflared).</p>
-            </div>
-        </div>
-        <div class="form-check form-switch fs-6">
-            <input class="form-check-input" type="checkbox" name="cf_tunnel_is_primary" value="1" id="tunnelPrimarySwitch" <?= setting('cf_tunnel_is_primary', '1') === '1' ? 'checked' : '' ?>>
-            <label class="form-check-label fw-semibold" for="tunnelPrimarySwitch">Place in Core Systems</label>
-        </div>
-    </div>
-    <div class="row g-3 mt-1">
-        <div class="col-md-6">
-            <label class="form-label fw-semibold">Custom Tunnel Label</label>
-            <input type="text" name="cf_tunnel_name" value="<?= htmlspecialchars(setting('cf_tunnel_name', '')) ?>" class="form-control" placeholder="e.g. MyETV Production Tunnel">
-        </div>
-        <div class="col-md-6">
-            <label class="form-label fw-semibold">Cloudflare Account ID</label>
-            <input type="text" name="cf_tunnel_account_id" value="<?= htmlspecialchars(setting('cf_tunnel_account_id', '')) ?>" class="form-control font-monospace" placeholder="32-character account ID">
-        </div>
-        <div class="col-md-6">
-            <label class="form-label fw-semibold">Tunnel ID (UUID)</label>
-            <input type="text" name="cf_tunnel_id" value="<?= htmlspecialchars(setting('cf_tunnel_id', '')) ?>" class="form-control font-monospace" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
-        </div>
-        <div class="col-md-6">
-            <label class="form-label fw-semibold">Cloudflare API Token</label>
-            <input type="password" name="cf_tunnel_api_token" value="<?= htmlspecialchars(setting('cf_tunnel_api_token', '')) ?>" class="form-control font-monospace" placeholder="API Token with Tunnel:Read permission">
-            <small class="text-muted">Requires <code>Account &gt; Cloudflare Tunnel &gt; Read</code> permissions.</small>
-        </div>
-    </div>
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="p-2 bg-warning bg-opacity-10 text-dark rounded-3 fs-4">
+                                <i class="bi bi-shield-shaded"></i>
+                            </span>
+                            <div>
+                                <h5 class="fw-bold mb-0">Cloudflare Zero Trust Tunnel Monitor (Optional)</h5>
+                                <p class="text-muted small mb-0">Monitor the live health status of your private Cloudflare Tunnel (cloudflared).</p>
+                            </div>
+                        </div>
+                        <div class="form-check form-switch fs-6">
+                            <input class="form-check-input" type="checkbox" name="cf_tunnel_is_primary" value="1" id="tunnelPrimarySwitch" <?= setting('cf_tunnel_is_primary', '1') === '1' ? 'checked' : '' ?>>
+                            <label class="form-check-label fw-semibold" for="tunnelPrimarySwitch">Place in Core Systems</label>
+                        </div>
+                    </div>
+                    <div class="row g-3 mt-1">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Custom Tunnel Label</label>
+                            <input type="text" name="cf_tunnel_name" value="<?= htmlspecialchars(setting('cf_tunnel_name', '')) ?>" class="form-control" placeholder="e.g. MyETV Production Tunnel">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Cloudflare Account ID</label>
+                            <input type="text" name="cf_tunnel_account_id" value="<?= htmlspecialchars(setting('cf_tunnel_account_id', '')) ?>" class="form-control font-monospace" placeholder="32-character account ID">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Tunnel ID (UUID)</label>
+                            <input type="text" name="cf_tunnel_id" value="<?= htmlspecialchars(setting('cf_tunnel_id', '')) ?>" class="form-control font-monospace" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Cloudflare API Token</label>
+                            <input type="password" name="cf_tunnel_api_token" value="<?= htmlspecialchars(setting('cf_tunnel_api_token', '')) ?>" class="form-control font-monospace" placeholder="API Token with Tunnel:Read permission">
+                            <small class="text-muted">Requires <code>Account &gt; Cloudflare Tunnel &gt; Read</code> permissions.</small>
+                        </div>
+                    </div>
+                </div>
 
-    <!-- Cloudflare Edge Worker Section -->
-<div class="p-4 bg-light rounded-3 border mb-4">
-    <div class="d-flex align-items-center justify-content-between mb-3">
-        <div class="d-flex align-items-center gap-2">
-            <span class="p-2 bg-primary bg-opacity-10 text-primary rounded-3 fs-4">
-                <i class="bi bi-globe-americas"></i>
-            </span>
-            <div>
-                <h5 class="fw-bold mb-0">Cloudflare Edge Worker Probes & Sentinel (Optional)</h5>
-                <p class="text-muted small mb-0">Run multi-location latency probes from Cloudflare edge and monitor server downtime autonomously.</p>
-            </div>
-        </div>
-        <div class="form-check form-switch fs-5">
-            <input class="form-check-input" type="checkbox" name="edge_worker_enabled" value="1" id="edgeWorkerSwitch" <?= setting('edge_worker_enabled') === '1' ? 'checked' : '' ?>>
-        </div>
-    </div>
+                <!-- Cloudflare Edge Worker Section -->
+                <div class="p-4 bg-light rounded-3 border mb-4">
+                    <div class="d-flex align-items-center justify-content-between mb-3">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="p-2 bg-primary bg-opacity-10 text-primary rounded-3 fs-4">
+                                <i class="bi bi-globe-americas"></i>
+                            </span>
+                            <div>
+                                <h5 class="fw-bold mb-0">Cloudflare Edge Worker Probes & Sentinel (Optional)</h5>
+                                <p class="text-muted small mb-0">Run multi-location latency probes from Cloudflare edge and monitor server downtime autonomously.</p>
+                            </div>
+                        </div>
+                        <div class="form-check form-switch fs-5">
+                            <input class="form-check-input" type="checkbox" name="edge_worker_enabled" value="1" id="edgeWorkerSwitch" <?= setting('edge_worker_enabled') === '1' ? 'checked' : '' ?>>
+                        </div>
+                    </div>
 
-    <!-- Step-by-Step Setup Guide Accordion -->
-    <div class="alert alert-info border-info-subtle mb-3 p-3">
-        <div class="d-flex justify-content-between align-items-center">
-            <strong class="text-dark small"><i class="bi bi-info-circle me-1 text-primary"></i> How to setup your Cloudflare Worker:</strong>
-            <button class="btn btn-sm btn-link p-0 text-decoration-none small fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#workerGuideCollapse">
-                Show Setup Guide <i class="bi bi-chevron-down ms-1"></i>
-            </button>
-        </div>
-        <div class="collapse mt-3 pt-2 border-top border-info-subtle small text-dark" id="workerGuideCollapse">
-            <ol class="ps-3 mb-2">
-                <li class="mb-1">
-                    <strong>Get the template code:</strong> Open the local file <code>edge/cloudflare-worker.js</code> in your repository.
-                </li>
-                <li class="mb-1">
-                    <strong>Create the Worker:</strong> In <a href="https://dash.cloudflare.com" target="_blank" class="text-primary fw-semibold">Cloudflare Dashboard</a> &rarr; <em>Workers & Pages</em> &rarr; <em>Create Application</em> &rarr; <em>Create Worker</em>, and paste the code from <code>edge/cloudflare-worker-ping.js</code>.
-                </li>
-                <li class="mb-1">
-                    <strong>Configure Variables (Worker Settings &rarr; Variables):</strong>
-                    <ul class="mt-1 ps-3 text-muted">
-                        <li><code>SHARED_SECRET_TOKEN</code>: A custom password/token (must match the token entered below).</li>
-                        <li><code>ORIGIN_STATUS_URL</code>: Your status page URL (<code><?= htmlspecialchars(app_url()) ?></code>).</li>
-                        <li><code>DISCORD_WEBHOOK_URL</code>: <em>(Optional)</em> Discord webhook for alerts if your origin server dies.</li>
-                    </ul>
-                </li>
-                <li class="mb-1">
-                    <strong>Enable Cron Trigger (Worker Settings &rarr; Triggers &rarr; Cron Triggers):</strong> Add <code>* * * * *</code> (every minute) so Cloudflare monitors your server even if your VPS crashes.</li>
-                <li>
-                    <strong>Paste URL & Token below:</strong> Copy your <code>https://your-worker.workers.dev</code> address into the field below.
-                </li>
-            </ol>
-        </div>
-    </div>
-
-    <div class="row g-3">
-        <div class="col-md-6">
-            <label class="form-label fw-semibold">Worker URL</label>
-            <input type="url" name="edge_worker_url" value="<?= htmlspecialchars(setting('edge_worker_url', '')) ?>" class="form-control" placeholder="https://my-edge-probe.workers.dev">
-            <small class="text-muted">The public <code>.workers.dev</code> endpoint of your deployed worker.</small>
-        </div>
-        <div class="col-md-6">
-            <label class="form-label fw-semibold">Shared Secret Token</label>
-            <input type="password" name="edge_worker_token" value="<?= htmlspecialchars(setting('edge_worker_token', '')) ?>" class="form-control" placeholder="Matches SHARED_SECRET_TOKEN in Worker">
-            <small class="text-muted">Used to authenticate requests between your server and the Cloudflare Worker.</small>
-        </div>
-    </div>
-</div>
-
-</div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Worker URL</label>
+                            <input type="url" name="edge_worker_url" value="<?= htmlspecialchars(setting('edge_worker_url', '')) ?>" class="form-control" placeholder="https://my-edge-probe.workers.dev">
+                            <small class="text-muted">The public <code>.workers.dev</code> endpoint of your deployed worker.</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Shared Secret Token</label>
+                            <input type="password" name="edge_worker_token" value="<?= htmlspecialchars(setting('edge_worker_token', '')) ?>" class="form-control" placeholder="Matches SHARED_SECRET_TOKEN in Worker">
+                            <small class="text-muted">Used to authenticate requests between your server and the Cloudflare Worker.</small>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -387,4 +431,39 @@ $allTimezones    = DateService::getTimezonesList();
             </button>
         </div>
     </form>
+</div>
+
+<!-- Modal: Sync Language JSONs via LibreTranslate -->
+<div class="modal fade" id="syncJsonModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form action="/admin/translations/sync" method="POST" class="modal-content shadow">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold"><i class="bi bi-translate me-2 text-primary"></i>Sync Language JSON File</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info small mb-3">
+                    <i class="bi bi-info-circle me-1"></i>
+                    This tool reads <code>languages/en.json</code>, identifies any missing keys in the target language file, translates them via your LibreTranslate server, and writes the updated <code>.json</code> file.
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Target Language to Generate/Sync</label>
+                    <select name="target_lang" class="form-select" required>
+                        <option value="it">Italiano (languages/it.json)</option>
+                        <option value="es">Español (languages/es.json)</option>
+                        <option value="fr">Français (languages/fr.json)</option>
+                        <option value="de">Deutsch (languages/de.json)</option>
+                        <option value="pt">Português (languages/pt.json)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-primary fw-semibold">
+                    <i class="bi bi-magic me-1"></i> Start JSON Auto-Translation
+                </button>
+            </div>
+        </form>
+    </div>
 </div>
