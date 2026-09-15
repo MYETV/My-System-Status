@@ -66,7 +66,39 @@ class SettingService
     }
 
     /**
-     * Get array of enabled languages for header switcher dropdowns.
+     * Complete catalog of 20 major world languages supported by LibreTranslate.
+     */
+    public static function getAllLanguages(): array
+    {
+        return [
+            // European
+            'en' => ['name' => 'English',            'flag' => 'EN'],
+            'it' => ['name' => 'Italiano',           'flag' => 'IT'],
+            'es' => ['name' => 'Español',            'flag' => 'ES'],
+            'fr' => ['name' => 'Français',           'flag' => 'FR'],
+            'de' => ['name' => 'Deutsch',            'flag' => 'DE'],
+            'pt' => ['name' => 'Português',          'flag' => 'PT'],
+            'nl' => ['name' => 'Nederlands',         'flag' => 'NL'],
+            'pl' => ['name' => 'Polski',             'flag' => 'PL'],
+            'sv' => ['name' => 'Svenska',            'flag' => 'SE'],
+            'el' => ['name' => 'Ελληνικά',           'flag' => 'GR'],
+            'ru' => ['name' => 'Русский',            'flag' => 'RU'],
+            'uk' => ['name' => 'Українська',         'flag' => 'UA'],
+
+            // Asian & Middle Eastern
+            'tr' => ['name' => 'Türkçe',             'flag' => 'TR'],
+            'ar' => ['name' => 'العربية',            'flag' => 'AR'],
+            'hi' => ['name' => 'हिन्दी',              'flag' => 'IN'],
+            'zh' => ['name' => '简体中文',           'flag' => 'CN'],
+            'ja' => ['name' => '日本語',             'flag' => 'JP'],
+            'ko' => ['name' => '한국어',             'flag' => 'KR'],
+            'vi' => ['name' => 'Tiếng Việt',         'flag' => 'VN'],
+            'id' => ['name' => 'Bahasa Indonesia',   'flag' => 'ID']
+        ];
+    }
+
+    /**
+     * Get array of active/enabled languages chosen by administrator for header dropdowns.
      */
     public static function getEnabledLocales(): array
     {
@@ -78,14 +110,7 @@ class SettingService
             array_unshift($activeCodes, 'en');
         }
 
-        $allSupported = [
-            'en' => ['name' => 'English',    'flag' => 'EN'],
-            'it' => ['name' => 'Italiano',   'flag' => 'IT'],
-            'es' => ['name' => 'Español',    'flag' => 'ES'],
-            'fr' => ['name' => 'Français',   'flag' => 'FR'],
-            'de' => ['name' => 'Deutsch',    'flag' => 'DE'],
-            'pt' => ['name' => 'Português',  'flag' => 'PT']
-        ];
+        $allSupported = self::getAllLanguages();
 
         $result = [];
         foreach ($activeCodes as $code) {
