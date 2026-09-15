@@ -91,82 +91,61 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
                         <small class="text-muted">Fallback timezone when browser auto-detection is not active.</small>
                     </div>
 
-                    <!-- Supported Languages in Header Selection -->
-                    <div class="col-md-6">
-                        <label class="form-label fw-semibold">Enabled Header Languages</label>
-                        <div class="p-3 bg-light rounded-3 border">
-                            <div class="row g-2">
-                                <div class="col-6 col-md-4">
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" name="enabled_locales[]" value="en" id="langEn" checked disabled>
-                                        <label class="form-check-label small fw-semibold" for="langEn">English (EN)</label>
-                                    </div>
-                                </div>
-                                <div class="col-6 col-md-4">
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" name="enabled_locales[]" value="it" id="langIt" <?= in_array('it', $enabledLocales, true) ? 'checked' : '' ?>>
-                                        <label class="form-check-label small fw-semibold" for="langIt">Italiano (IT)</label>
-                                    </div>
-                                </div>
-                                <div class="col-6 col-md-4">
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" name="enabled_locales[]" value="es" id="langEs" <?= in_array('es', $enabledLocales, true) ? 'checked' : '' ?>>
-                                        <label class="form-check-label small fw-semibold" for="langEs">Español (ES)</label>
-                                    </div>
-                                </div>
-                                <div class="col-6 col-md-4">
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" name="enabled_locales[]" value="fr" id="langFr" <?= in_array('fr', $enabledLocales, true) ? 'checked' : '' ?>>
-                                        <label class="form-check-label small fw-semibold" for="langFr">Français (FR)</label>
-                                    </div>
-                                </div>
-                                <div class="col-6 col-md-4">
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" name="enabled_locales[]" value="de" id="langDe" <?= in_array('de', $enabledLocales, true) ? 'checked' : '' ?>>
-                                        <label class="form-check-label small fw-semibold" for="langDe">Deutsch (DE)</label>
-                                    </div>
-                                </div>
-                                <div class="col-6 col-md-4">
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" name="enabled_locales[]" value="pt" id="langPt" <?= in_array('pt', $enabledLocales, true) ? 'checked' : '' ?>>
-                                        <label class="form-check-label small fw-semibold" for="langPt">Português (PT)</label>
-                                    </div>
-                                </div>
-                            </div>
-                            <small class="text-muted d-block mt-2">Only checked languages will be selectable in the navigation headers.</small>
-                        </div>
+                    <!-- Supported Languages Selection (20 World Languages) -->
+<div class="col-md-6">
+    <label class="form-label fw-semibold">Enabled Header Languages (Choose active languages)</label>
+    <div class="p-3 bg-light rounded-3 border" style="max-height: 220px; overflow-y: auto;">
+        <div class="row g-2">
+            <?php foreach (SettingService::getAllLanguages() as $code => $info): ?>
+                <div class="col-6 col-md-4">
+                    <div class="form-check">
+                        <input class="form-check-input" 
+                               type="checkbox" 
+                               name="enabled_locales[]" 
+                               value="<?= $code ?>" 
+                               id="lang_<?= $code ?>" 
+                               <?= $code === 'en' ? 'checked disabled' : (in_array($code, $enabledLocales, true) ? 'checked' : '') ?>>
+                        <label class="form-check-label small fw-semibold text-truncate" for="lang_<?= $code ?>" title="<?= htmlspecialchars($info['name']) ?>">
+                            <?= htmlspecialchars($info['name']) ?> (<?= $info['flag'] ?>)
+                        </label>
                     </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+    <small class="text-muted d-block mt-1">Check the languages you want to expose in public and admin headers.</small>
+</div>
 
-                    <!-- LibreTranslate Configuration & Auto-Sync Section -->
-                    <div class="col-12 mt-4">
-                        <div class="p-4 bg-light rounded-3 border">
-                            <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
-                                <div class="d-flex align-items-center gap-2">
-                                    <span class="p-2 bg-warning bg-opacity-10 text-dark rounded-3 fs-4">
-                                        <i class="bi bi-translate"></i>
-                                    </span>
-                                    <div>
-                                        <h5 class="fw-bold mb-0">LibreTranslate Language Files Generator</h5>
-                                        <p class="text-muted small mb-0">Auto-translate missing keys from <code>languages/en.json</code> into other language files.</p>
-                                    </div>
-                                </div>
-                                <button type="button" class="btn btn-sm btn-primary fw-semibold" data-bs-toggle="modal" data-bs-target="#syncJsonModal">
-                                    <i class="bi bi-magic me-1"></i> Auto-Translate JSON Files
-                                </button>
-                            </div>
+<!-- LibreTranslate Configuration & Auto-Sync Section -->
+<div class="col-12 mt-4">
+    <div class="p-4 bg-light rounded-3 border">
+        <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+            <div class="d-flex align-items-center gap-2">
+                <span class="p-2 bg-warning bg-opacity-10 text-dark rounded-3 fs-4">
+                    <i class="bi bi-translate"></i>
+                </span>
+                <div>
+                    <h5 class="fw-bold mb-0">LibreTranslate Language Files Generator</h5>
+                    <p class="text-muted small mb-0">Auto-translate missing keys from <code>languages/en.json</code> into other language JSON files.</p>
+                </div>
+            </div>
+            <button type="button" class="btn btn-sm btn-primary fw-semibold" data-bs-toggle="modal" data-bs-target="#syncJsonModal">
+                <i class="bi bi-magic me-1"></i> Auto-Translate JSON Files
+            </button>
+        </div>
 
-                            <div class="row g-3">
-                                <div class="col-md-6">
-                                    <label class="form-label fw-semibold">LibreTranslate API Endpoint</label>
-                                    <input type="url" name="libretranslate_endpoint" value="<?= htmlspecialchars(setting('libretranslate_endpoint', '')) ?>" class="form-control" placeholder="http://192.168.x.x:5055/translate (leave empty if disabled)">
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label fw-semibold">LibreTranslate API Key (Optional)</label>
-                                    <input type="password" name="libretranslate_api_key" value="<?= htmlspecialchars(setting('libretranslate_api_key', '')) ?>" class="form-control" placeholder="Leave blank if self-hosted without key">
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label fw-semibold">LibreTranslate API Endpoint</label>
+                <input type="url" name="libretranslate_endpoint" value="<?= htmlspecialchars(setting('libretranslate_endpoint', '')) ?>" class="form-control" placeholder="http://192.168.x.x:5055/translate (leave empty if disabled)">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label fw-semibold">LibreTranslate API Key (Optional)</label>
+                <input type="password" name="libretranslate_api_key" value="<?= htmlspecialchars(setting('libretranslate_api_key', '')) ?>" class="form-control" placeholder="Leave blank if self-hosted without key">
+            </div>
+        </div>
+    </div>
+</div>
                 </div>
             </div>
 
