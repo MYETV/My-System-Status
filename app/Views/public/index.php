@@ -10,7 +10,7 @@ $allMaintenances = $allMaintenances ?? [];
         display: flex;
         gap: 2px;
         align-items: stretch;
-        height: 56px; /* Total height: 11px top space + 34px bar + 11px bottom space */
+        height: 56px; /* 11px top arrow + 34px middle bar + 11px bottom arrow */
         width: 100%;
         max-width: 100%;
         box-sizing: border-box;
@@ -28,10 +28,10 @@ $allMaintenances = $allMaintenances ?? [];
     /* Day Column with Reserved Space for Outside Arrows */
     .uptime-day-col {
         flex: 1 1 0;
-        min-width: 0; /* Allows shrink without horizontal overflow */
+        min-width: 0;
         height: 100%;
         position: relative;
-        padding: 11px 0; /* CRITICAL: Reserves 11px on top and 11px on bottom strictly OUTSIDE the bar */
+        padding: 11px 0; /* Reserves space strictly outside the bar */
         box-sizing: border-box;
         display: flex;
         align-items: center;
@@ -40,7 +40,7 @@ $allMaintenances = $allMaintenances ?? [];
         overflow: visible;
     }
 
-    /* The Middle Health Bar (Never overlapped by arrows!) */
+    /* The Middle Health Bar */
     .uptime-bar {
         width: 100%;
         height: 100%;
@@ -55,7 +55,7 @@ $allMaintenances = $allMaintenances ?? [];
         z-index: 5;
     }
 
-    /* High-Definition SVG Markers Positioned Strictly Above and Below */
+    /* Directional SVG Markers Outside the Bar */
     .uptime-arrow-top {
         position: absolute;
         top: 1px;
@@ -247,7 +247,7 @@ $allMaintenances = $allMaintenances ?? [];
                 </div>
             </div>
 
-            <!-- 90-Day Interactive Uptime Graph with Outside Directional Arrows -->
+            <!-- 90-Day Interactive Uptime Graph with Bi-directional Gradients -->
             <div class="uptime-graph" role="group" aria-label="90 Days Uptime History">
                 <?php
                     for ($day = 89; $day >= 0; $day--):
@@ -262,11 +262,12 @@ $allMaintenances = $allMaintenances ?? [];
                         $blackChecks = (int)($dayData['blackout'] ?? 0);
                         $upChecks    = (int)($dayData['up'] ?? max(0, $totalChecks - $downChecks - $blackChecks));
 
-                        $dailyUptimePct = ($totalChecks > 0) 
-                            ? round(($upChecks / $totalChecks) * 100, 2) 
-                            : 100.00;
+                        // Actual Percentages for this specific day
+                        $blackPct = ($totalChecks > 0) ? round(($blackChecks / $totalChecks) * 100, 1) : 0;
+                        $downPct  = ($totalChecks > 0) ? round(($downChecks / $totalChecks) * 100, 1) : 0;
+                        $dailyUptimePct = ($totalChecks > 0) ? round(($upChecks / $totalChecks) * 100, 2) : 100.00;
 
-                        // 1. Collect ALL Incidents on this day
+                        // Collect Incidents and Maintenances for markers
                         $dayIncidents = [];
                         foreach ($allIncidents as $inc) {
                             if (empty($inc['monitor_id']) || (int)$inc['monitor_id'] === $mId) {
@@ -278,7 +279,6 @@ $allMaintenances = $allMaintenances ?? [];
                             }
                         }
 
-                        // 2. Collect ALL Maintenances on this day
                         $dayMaintenances = [];
                         foreach ($allMaintenances as $maint) {
                             if (empty($maint['monitor_id']) || (int)$maint['monitor_id'] === $mId) {
@@ -293,28 +293,45 @@ $allMaintenances = $allMaintenances ?? [];
                         $hasMaintenance = !empty($dayMaintenances);
                         $hasIncident    = !empty($dayIncidents);
 
-                        // Base Bar Color (Preserves Uptime & Gradients)
+                        // DYNAMIC COLOR & BI-DIRECTIONAL GRADIENT LOGIC
+                        $barClass = 'uptime-bar';
+                        $barStyle = '';
+
                         if ($day === 0 && $isDown) {
-                            $barClass = 'uptime-outage';
-                            $barStyle = '';
+                            // Active Down today: pure red
+                            $barClass .= ' uptime-outage';
                             $statusDesc = "<span style='color: #ef4444;'>●</span> Major Outage (Active Down)";
+                        } elseif ($blackChecks > 0 && $downChecks > 0) {
+                            // Tri-gradient: Black from TOP, Green in MIDDLE, Red from BOTTOM!
+                            $vBlack = max(15, min(40, (int)$blackPct));
+                            $vRed   = max(15, min(40, (int)$downPct));
+                            $gStart = $vBlack;
+                            $gEnd   = 100 - $vRed;
+                            $barStyle = "style=\"background: linear-gradient(to bottom, #0f172a 0%, #0f172a {$gStart}%, #10b981 {$gStart}%, #10b981 {$gEnd}%, #ef4444 {$gEnd}%, #ef4444 100%);\"";
+                            $statusDesc = "<span style='color: #0f172a;'>⬛</span> Blackout: {$blackPct}% &bull; <span style='color: #ef4444;'>●</span> Downtime: {$downPct}%";
                         } elseif ($blackChecks > 0) {
-                            $barClass = 'uptime-blackout';
-                            $barStyle = '';
-                            $statusDesc = "<span style='color: #0f172a;'>⬛</span> System Blackout ({$dailyUptimePct}% Uptime)";
+                            // BLACK DESCENDS FROM TOP DOWN!
+                            if ($blackPct >= 95.0) {
+                                $barStyle = 'style="background-color: #0f172a;"';
+                            } else {
+                                $vBlack = max(15, min(85, (int)$blackPct));
+                                $barStyle = "style=\"background: linear-gradient(to bottom, #0f172a 0%, #0f172a {$vBlack}%, #10b981 {$vBlack}%, #10b981 100%);\"";
+                            }
+                            $statusDesc = "<span style='color: #0f172a;'>⬛</span> System Blackout: {$blackPct}% ({$dailyUptimePct}% Operational)";
                         } elseif ($downChecks > 0) {
-                            $downPct = round(100.0 - $dailyUptimePct, 2);
-                            $redVisualPct = max(15, min(100, (int)$downPct));
-                            $barClass = 'uptime-partial';
-                            $barStyle = "style=\"background: linear-gradient(to top, #ef4444 0%, #ef4444 {$redVisualPct}%, #10b981 {$redVisualPct}%, #10b981 100%);\"";
-                            $statusDesc = "<span style='color: #ef4444;'>●</span> Downtime: {$downPct}% ({$dailyUptimePct}% Uptime)";
+                            // RED RISES FROM BOTTOM UP!
+                            if ($downPct >= 95.0) {
+                                $barStyle = 'style="background-color: #ef4444;"';
+                            } else {
+                                $vRed = max(15, min(85, (int)$downPct));
+                                $barStyle = "style=\"background: linear-gradient(to top, #ef4444 0%, #ef4444 {$vRed}%, #10b981 {$vRed}%, #10b981 100%);\"";
+                            }
+                            $statusDesc = "<span style='color: #ef4444;'>●</span> Downtime: {$downPct}% ({$dailyUptimePct}% Operational)";
                         } elseif ($totalChecks > 0) {
-                            $barClass = 'uptime-operational';
-                            $barStyle = '';
+                            $barStyle = 'style="background-color: #10b981;"';
                             $statusDesc = "<span style='color: #10b981;'>●</span> 100% Operational";
                         } else {
-                            $barClass = 'uptime-operational';
-                            $barStyle = '';
+                            $barStyle = 'style="background-color: #10b981;"';
                             $statusDesc = "<span style='color: #10b981;'>●</span> Operational";
                         }
 
@@ -353,8 +370,12 @@ $allMaintenances = $allMaintenances ?? [];
                                 'end_time'    => format_date($m['end_time'], 'M d, Y H:i T')
                             ], $dayMaintenances)
                         ];
+
+                        $colClasses = 'uptime-day-col';
+                        if ($hasMaintenance) $colClasses .= ' has-maint';
+                        if ($hasIncident)    $colClasses .= ' has-inc';
                 ?>
-                    <div class="uptime-day-col" 
+                    <div class="<?= $colClasses ?>" 
                          data-bs-toggle="tooltip" 
                          data-bs-placement="top" 
                          data-bs-html="true" 
@@ -362,17 +383,17 @@ $allMaintenances = $allMaintenances ?? [];
                          data-day-payload='<?= htmlspecialchars(json_encode($modalPayload, JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES, 'UTF-8') ?>'
                          onclick="openDayDetailModalFromElement(this)">
 
-                        <!-- Top Marker: Sharp SVG Down-Arrow strictly ABOVE the bar -->
+                        <!-- Top Marker: Sharp SVG Down-Arrow (Maintenance) -->
                         <?php if ($hasMaintenance): ?>
                             <svg class="uptime-arrow-top" viewBox="0 0 10 7">
                                 <polygon points="0,0 10,0 5,7" fill="#0ea5e9" />
                             </svg>
                         <?php endif; ?>
 
-                        <!-- Middle Bar: Clean Uptime Status (Never overlapped!) -->
-                        <div class="uptime-bar <?= $barClass ?>" <?= $barStyle ?>></div>
+                        <!-- Middle Bar: True Uptime with Bi-directional Gradients -->
+                        <div class="<?= $barClass ?>" <?= $barStyle ?>></div>
 
-                        <!-- Bottom Marker: Sharp SVG Up-Arrow strictly BELOW the bar -->
+                        <!-- Bottom Marker: Sharp SVG Up-Arrow (Incident) -->
                         <?php if ($hasIncident): ?>
                             <svg class="uptime-arrow-bottom" viewBox="0 0 10 7">
                                 <polygon points="5,0 10,7 0,7" fill="#ea580c" />
@@ -389,7 +410,7 @@ $allMaintenances = $allMaintenances ?? [];
                 <span>Today</span>
             </div>
 
-            <!-- Sub-services Drawer -->
+            <!-- Sub-services Drawer with Bi-directional Gradients -->
             <?php if ($hasChildren): ?>
                 <div class="collapse mt-3 pt-3 border-top" id="subservices-<?= $monitor['id'] ?>">
                     <div class="ps-2 ps-sm-3 border-start border-3 border-primary-subtle d-flex flex-column gap-3">
@@ -421,30 +442,40 @@ $allMaintenances = $allMaintenances ?? [];
 
                                             $cData = $uptimeHistory[$cId][$cDayDate] ?? null;
 
+                                            $cTotal = (int)($cData['total'] ?? 0);
+                                            $cDown  = (int)($cData['down'] ?? 0);
+                                            $cBlack = (int)($cData['blackout'] ?? 0);
+
+                                            $cStyle = '';
+                                            $cLabel = "<strong>{$cDate}</strong><br>";
+
                                             if ($cDay === 0 && $childDown) {
-                                                $cClass = 'uptime-outage';
-                                                $cStyle = '';
-                                                $cLabel = "<strong>{$cDate}</strong><br><span style='color: #ef4444;'>●</span> Outage";
-                                            } elseif ($cData && ($cData['blackout'] ?? 0) > 0) {
-                                                $cClass = 'uptime-blackout';
-                                                $cStyle = '';
-                                                $cLabel = "<strong>{$cDate}</strong><br><span style='color: #0f172a;'>⬛</span> Blackout";
-                                            } elseif ($cData && ($cData['down'] ?? 0) > 0) {
-                                                $cTotal = (int)($cData['total'] ?? 0);
-                                                $cDown  = (int)($cData['down'] ?? 0);
-                                                $cUpPct = $cTotal > 0 ? round((($cTotal - $cDown) / $cTotal) * 100, 2) : 95.0;
-                                                $cDownPct = round(100.0 - $cUpPct, 2);
-                                                $cRedPct  = max(15, min(100, (int)$cDownPct));
-                                                $cClass = 'uptime-partial';
-                                                $cStyle = "style=\"background: linear-gradient(to top, #ef4444 0%, #ef4444 {$cRedPct}%, #10b981 {$cRedPct}%, #10b981 100%);\"";
-                                                $cLabel = "<strong>{$cDate}</strong><br><span style='color: #ef4444;'>●</span> Partial Outage ({$cUpPct}% Uptime)";
+                                                $cStyle = 'style="background-color: #ef4444;"';
+                                                $cLabel .= "<span style='color: #ef4444;'>●</span> Outage";
+                                            } elseif ($cBlack > 0 && $cTotal > 0) {
+                                                $cBlackPct = round(($cBlack / $cTotal) * 100);
+                                                if ($cBlackPct >= 95) {
+                                                    $cStyle = 'style="background-color: #0f172a;"';
+                                                } else {
+                                                    $vBlack = max(15, min(85, $cBlackPct));
+                                                    $cStyle = "style=\"background: linear-gradient(to bottom, #0f172a 0%, #0f172a {$vBlack}%, #10b981 {$vBlack}%, #10b981 100%);\"";
+                                                }
+                                                $cLabel .= "<span style='color: #0f172a;'>⬛</span> Blackout: {$cBlackPct}%";
+                                            } elseif ($cDown > 0 && $cTotal > 0) {
+                                                $cDownPct = round(($cDown / $cTotal) * 100);
+                                                if ($cDownPct >= 95) {
+                                                    $cStyle = 'style="background-color: #ef4444;"';
+                                                } else {
+                                                    $vRed = max(15, min(85, $cDownPct));
+                                                    $cStyle = "style=\"background: linear-gradient(to top, #ef4444 0%, #ef4444 {$vRed}%, #10b981 {$vRed}%, #10b981 100%);\"";
+                                                }
+                                                $cLabel .= "<span style='color: #ef4444;'>●</span> Downtime: {$cDownPct}%";
                                             } else {
-                                                $cClass = 'uptime-operational';
-                                                $cStyle = '';
-                                                $cLabel = "<strong>{$cDate}</strong><br><span style='color: #10b981;'>●</span> Operational";
+                                                $cStyle = 'style="background-color: #10b981;"';
+                                                $cLabel .= "<span style='color: #10b981;'>●</span> Operational";
                                             }
                                     ?>
-                                        <div class="uptime-bar <?= $cClass ?>" 
+                                        <div class="uptime-bar" 
                                              <?= $cStyle ?>
                                              data-bs-toggle="tooltip" 
                                              data-bs-placement="top" 
@@ -529,7 +560,7 @@ $allMaintenances = $allMaintenances ?? [];
     <?php endif; ?>
 </div>
 
-<!-- Modal 1: Daily History Inspector (Supports MULTIPLE Maintenances & Incidents!) -->
+<!-- Modal 1: Daily History Inspector -->
 <div class="modal fade" id="dayDetailModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content shadow">
