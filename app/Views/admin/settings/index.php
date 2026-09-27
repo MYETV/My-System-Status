@@ -151,7 +151,7 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
                             <div class="row g-3">
                                 <div class="col-md-6">
                                     <label class="form-label fw-semibold">LibreTranslate API Endpoint</label>
-                                    <input type="url" name="libretranslate_endpoint" value="<?= htmlspecialchars(setting('libretranslate_endpoint', '')) ?>" class="form-control" placeholder="http://192.168.x.x:5055/translate (leave empty if disabled)">
+                                    <input type="url" name="libretranslate_endpoint" value="<?= htmlspecialchars(setting('libretranslate_endpoint', '')) ?>" class="form-control" placeholder="http://localhost:5000/translate (leave empty if disabled)">
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label fw-semibold">LibreTranslate API Key (Optional)</label>
@@ -165,7 +165,6 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
 
             <!-- 2. SECURITY TAB (Turnstile & Rate Limiter) -->
             <div class="tab-pane fade" id="securityTab" role="tabpanel">
-                <!-- Cloudflare Turnstile Section -->
                 <div class="p-4 bg-light rounded-3 border mb-4">
                     <div class="d-flex align-items-center justify-content-between mb-3">
                         <div>
@@ -189,7 +188,6 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
                     </div>
                 </div>
 
-                <!-- Rate Limiting Configuration -->
                 <div class="p-4 bg-light rounded-3 border">
                     <div class="d-flex align-items-center justify-content-between mb-3">
                         <div>
@@ -252,7 +250,6 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
 
             <!-- 4. OAUTH SSO TAB -->
             <div class="tab-pane fade" id="oauthTab" role="tabpanel">
-                <!-- MYETV SSO -->
                 <div class="p-3 bg-light rounded-3 mb-4 border">
                     <h5 class="fw-bold text-primary mb-2"><i class="bi bi-tv me-2"></i>MYETV SSO Provider</h5>
                     <p class="small text-muted mb-3">API integration from <code>https://developers.myetv.tv</code></p>
@@ -268,7 +265,6 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
                     </div>
                 </div>
 
-                <!-- Google SSO -->
                 <div class="p-3 bg-light rounded-3 mb-4 border">
                     <h5 class="fw-bold text-danger mb-2"><i class="bi bi-google me-2"></i>Google OAuth 2.0</h5>
                     <div class="row g-3">
@@ -283,7 +279,6 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
                     </div>
                 </div>
 
-                <!-- Microsoft Azure AD SSO -->
                 <div class="p-3 bg-light rounded-3 mb-4 border">
                     <h5 class="fw-bold text-info mb-2"><i class="bi bi-microsoft me-2"></i>Microsoft Azure AD</h5>
                     <div class="row g-3">
@@ -298,7 +293,6 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
                     </div>
                 </div>
 
-                <!-- Facebook SSO -->
                 <div class="p-3 bg-light rounded-3 border">
                     <h5 class="fw-bold text-primary mb-2"><i class="bi bi-facebook me-2"></i>Facebook Login</h5>
                     <div class="row g-3">
@@ -319,22 +313,48 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
                 <div class="row g-3">
                     <div class="col-md-4">
                         <label class="form-label fw-semibold">AI Provider Engine</label>
-                        <select name="ai_provider" class="form-select">
-                            <option value="gemini" <?= setting('ai_provider', 'gemini') === 'gemini' ? 'selected' : '' ?>>Google Gemini API</option>
-                            <option value="ollama" <?= setting('ai_provider', 'gemini') === 'ollama' ? 'selected' : '' ?>>Ollama (Local / Self-Hosted)</option>
+                        <?php $aiProvider = setting('ai_provider', 'gemini'); ?>
+                        <select name="ai_provider" class="form-select" id="aiProviderSelect">
+                            <option value="gemini" <?= $aiProvider === 'gemini' ? 'selected' : '' ?>>Google Gemini API (Cloud)</option>
+                            <option value="ollama" <?= $aiProvider === 'ollama' ? 'selected' : '' ?>>Ollama (Local / Self-Hosted)</option>
+                            <option value="openai-chat" <?= $aiProvider === 'openai-chat' ? 'selected' : '' ?>>OpenAI-Compatible Chat (MLX-LM, LocalAI, vLLM, OpenAI)</option>
                         </select>
                     </div>
                     <div class="col-md-8">
                         <label class="form-label fw-semibold">Model Name</label>
-                        <input type="text" name="ai_model" value="<?= htmlspecialchars(setting('ai_model', '')) ?>" class="form-control" placeholder="e.g. gemini-1.5-flash or llama3">
+                        <input type="text" name="ai_model" value="<?= htmlspecialchars(setting('ai_model', '')) ?>" class="form-control" id="aiModelInput" placeholder="e.g. gemini-1.5-flash or llama3">
                     </div>
-                    <div class="col-md-6">
-                        <label class="form-label fw-semibold">Gemini API Key</label>
-                        <input type="password" name="ai_api_key" value="<?= htmlspecialchars(setting('ai_api_key', '')) ?>" class="form-control" placeholder="AIzaSy... (leave empty if not using Gemini)">
+
+                    <!-- Gemini Specific Fields -->
+                    <div class="col-12" id="geminiGroup">
+                        <div class="p-3 bg-light rounded-3 border">
+                            <label class="form-label fw-semibold">Gemini API Key</label>
+                            <input type="password" name="ai_api_key" value="<?= htmlspecialchars(setting('ai_api_key', '')) ?>" class="form-control" placeholder="AIzaSy... (leave empty if not using Gemini)">
+                        </div>
                     </div>
-                    <div class="col-md-6">
-                        <label class="form-label fw-semibold">Ollama Endpoint URL</label>
-                        <input type="url" name="ai_endpoint" value="<?= htmlspecialchars(setting('ai_endpoint', '')) ?>" class="form-control" placeholder="e.g. http://127.0.0.1:11434 (leave empty if not using Ollama)">
+
+                    <!-- Ollama Specific Fields -->
+                    <div class="col-12" id="ollamaGroup">
+                        <div class="p-3 bg-light rounded-3 border">
+                            <label class="form-label fw-semibold">Ollama Server Endpoint URL</label>
+                            <input type="url" name="ai_endpoint" value="<?= htmlspecialchars(setting('ai_endpoint', '')) ?>" class="form-control" placeholder="http://localhost:11434 (leave empty for default)">
+                        </div>
+                    </div>
+
+                    <!-- OpenAI-Compatible Chat Specific Fields -->
+                    <div class="col-12" id="openaiGroup">
+                        <div class="p-3 bg-light rounded-3 border">
+                            <div class="row g-3">
+                                <div class="col-md-8">
+                                    <label class="form-label fw-semibold">Chat Completions Endpoint URL</label>
+                                    <input type="url" name="ai_openai_endpoint" value="<?= htmlspecialchars(setting('ai_openai_endpoint', '')) ?>" class="form-control" placeholder="http://localhost:11435/v1/chat/completions">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label fw-semibold">API Key / Bearer Token (Optional)</label>
+                                    <input type="password" name="ai_openai_api_key" value="<?= htmlspecialchars(setting('ai_openai_api_key', '')) ?>" class="form-control" placeholder="Leave empty for local inference">
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -402,7 +422,6 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
                         </div>
                     </div>
 
-                    <!-- Step-by-Step Setup Guide Accordion -->
                     <div class="alert alert-info border-info-subtle mb-3 p-3">
                         <div class="d-flex justify-content-between align-items-center">
                             <strong class="text-dark small"><i class="bi bi-info-circle me-1 text-primary"></i> How to setup your Cloudflare Worker:</strong>
@@ -512,3 +531,34 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
         </form>
     </div>
 </div>
+
+<script>
+    // Dynamic visibility toggle for AI provider input fields
+    function updateAIFields() {
+        const provider = document.getElementById('aiProviderSelect').value;
+        const geminiGroup = document.getElementById('geminiGroup');
+        const ollamaGroup = document.getElementById('ollamaGroup');
+        const openaiGroup = document.getElementById('openaiGroup');
+        const modelInput  = document.getElementById('aiModelInput');
+
+        geminiGroup.style.display = (provider === 'gemini') ? 'block' : 'none';
+        ollamaGroup.style.display = (provider === 'ollama') ? 'block' : 'none';
+        openaiGroup.style.display = (provider === 'openai-chat') ? 'block' : 'none';
+
+        if (provider === 'gemini') {
+            modelInput.placeholder = 'e.g. gemini-1.5-flash';
+        } else if (provider === 'ollama') {
+            modelInput.placeholder = 'e.g. llama3, mistral, gemma';
+        } else if (provider === 'openai-chat') {
+            modelInput.placeholder = 'e.g. gpt-4o, llama-3, gemma-2';
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const providerSelect = document.getElementById('aiProviderSelect');
+        if (providerSelect) {
+            providerSelect.addEventListener('change', updateAIFields);
+            updateAIFields();
+        }
+    });
+</script>
