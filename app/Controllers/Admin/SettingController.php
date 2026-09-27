@@ -47,6 +47,8 @@ class SettingController
             'oauth_microsoft_client_id', 'oauth_microsoft_client_secret',
             'oauth_facebook_client_id', 'oauth_facebook_client_secret',
             'ai_provider', 'ai_api_key', 'ai_endpoint', 'ai_model',
+            // OpenAI-compatible Chat Completions settings
+            'ai_openai_endpoint', 'ai_openai_api_key',
             'libretranslate_endpoint', 'libretranslate_api_key',
             'turnstile_site_key', 'turnstile_secret_key',
             'rate_limit_max_attempts', 'rate_limit_lockout_minutes',
