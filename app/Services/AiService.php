@@ -12,18 +12,10 @@ class AiService
 
     public function __construct(string $provider, array $config)
     {
-        $this->provider = $provider;
-        $this->apiKey   = $config['api_key'] ?? '';
-        $this->endpoint = $config['endpoint'] ?? match($provider) {
-            'ollama'      => 'http://localhost:11434',
-            'openai-chat' => 'http://localhost:11435/v1/chat/completions',
-            default       => 'https://generativelanguage.googleapis.com'
-        };
-        $this->model    = $config['model'] ?? match($provider) {
-            'ollama'      => 'llama3',
-            'openai-chat' => 'gpt-4o',
-            default       => 'gemini-1.5-flash'
-        };
+        $this->provider = trim($provider);
+        $this->apiKey   = trim((string)($config['api_key'] ?? ''));
+        $this->endpoint = trim((string)($config['endpoint'] ?? ''));
+        $this->model    = trim((string)($config['model'] ?? ''));
     }
 
     /**
@@ -31,13 +23,31 @@ class AiService
      */
     public function generateIncidentReport(string $serviceName, string $errorDetails): string
     {
+        // Strict validation: do not proceed if required parameters are missing
+        if (empty($this->model)) {
+            error_log("AI Service Error: Model name is not configured.");
+            return 'AI service is not configured: model name is missing in settings.';
+        }
+
+        if ($this->provider === 'gemini') {
+            if (empty($this->apiKey)) {
+                error_log("AI Service Error: Gemini API key is not configured.");
+                return 'AI service is not configured: Gemini API key is missing in settings.';
+            }
+        } else {
+            if (empty($this->endpoint)) {
+                error_log("AI Service Error: Endpoint URL is not configured for provider [{$this->provider}].");
+                return 'AI service is not configured: endpoint URL is missing in settings.';
+            }
+        }
+
         $prompt = "You are an infrastructure system administrator. Provide a concise, professional public incident report status update (2-3 sentences) explaining that we are investigating issues with {$serviceName}. Raw error detail: {$errorDetails}. Do not mention sensitive data.";
 
         return match ($this->provider) {
             'ollama'      => $this->callOllama($prompt),
             'gemini'      => $this->callGemini($prompt),
             'openai-chat' => $this->callOpenAiChat($prompt),
-            default       => "Incident currently under investigation by engineers."
+            default       => "AI provider [{$this->provider}] is not supported."
         };
     }
 
@@ -56,11 +66,19 @@ class AiService
             CURLOPT_POSTFIELDS     => json_encode($data),
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
-            CURLOPT_TIMEOUT        => 30
+            CURLOPT_TIMEOUT        => 30,
+            CURLOPT_CONNECTTIMEOUT => 10
         ]);
 
         $response = curl_exec($ch);
+        $curlErr  = curl_error($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
+
+        if ($curlErr || $httpCode !== 200) {
+            error_log("Ollama Call Error on [{$url}]: HTTP $httpCode, Curl: $curlErr, Response: " . substr((string)$response, 0, 300));
+            return 'AI service generation failed.';
+        }
 
         $json = json_decode((string)$response, true);
         return $json['response'] ?? 'AI service generation failed.';
@@ -68,7 +86,9 @@ class AiService
 
     private function callGemini(string $prompt): string
     {
-        $url = "{$this->endpoint}/v1beta/models/{$this->model}:generateContent?key={$this->apiKey}";
+        $endpoint = !empty($this->endpoint) ? rtrim($this->endpoint, '/') : 'https://generativelanguage.googleapis.com';
+        $url = "{$endpoint}/v1beta/models/{$this->model}:generateContent?key={$this->apiKey}";
+        
         $data = [
             'contents' => [
                 ['parts' => [['text' => $prompt]]]
@@ -81,11 +101,19 @@ class AiService
             CURLOPT_POSTFIELDS     => json_encode($data),
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
-            CURLOPT_TIMEOUT        => 20
+            CURLOPT_TIMEOUT        => 20,
+            CURLOPT_CONNECTTIMEOUT => 10
         ]);
 
         $response = curl_exec($ch);
+        $curlErr  = curl_error($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
+
+        if ($curlErr || $httpCode !== 200) {
+            error_log("Gemini Call Error on [{$url}]: HTTP $httpCode, Curl: $curlErr, Response: " . substr((string)$response, 0, 300));
+            return 'AI service generation failed.';
+        }
 
         $json = json_decode((string)$response, true);
         return $json['candidates'][0]['content']['parts'][0]['text'] ?? 'AI service generation failed.';
@@ -118,14 +146,17 @@ class AiService
             CURLOPT_POSTFIELDS     => json_encode($data),
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_HTTPHEADER     => $headers,
-            CURLOPT_TIMEOUT        => 30
+            CURLOPT_TIMEOUT        => 45,
+            CURLOPT_CONNECTTIMEOUT => 10
         ]);
 
         $response = curl_exec($ch);
+        $curlErr  = curl_error($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
-        if (!$response || $httpCode !== 200) {
+        if ($curlErr || $httpCode !== 200) {
+            error_log("OpenAI-Chat Call Error on [{$url}]: HTTP $httpCode, Curl: $curlErr, Response: " . substr((string)$response, 0, 300));
             return 'AI service generation failed.';
         }
 
