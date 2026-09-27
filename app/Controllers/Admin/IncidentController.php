@@ -230,10 +230,22 @@ class IncidentController
         $errorDetails = $_POST['error_details'] ?? 'Unexpected downtime detected by automated probes.';
 
         $provider = SettingService::get('ai_provider', 'gemini');
+
+        // Dynamically select the correct endpoint and credentials based on the active provider
+        if ($provider === 'openai-chat') {
+            $endpoint = SettingService::get('ai_openai_endpoint', '') ?: SettingService::get('ai_endpoint', '');
+            $apiKey   = SettingService::get('ai_openai_api_key', '') ?: SettingService::get('ai_api_key', '');
+        } else {
+            $endpoint = SettingService::get('ai_endpoint', '');
+            $apiKey   = SettingService::get('ai_api_key', '');
+        }
+
+        $model = SettingService::get('ai_model', '');
+
         $config = [
-            'api_key'  => SettingService::get('ai_api_key', ''),
-            'endpoint' => SettingService::get('ai_endpoint', ''),
-            'model'    => SettingService::get('ai_model', '')
+            'api_key'  => $apiKey,
+            'endpoint' => $endpoint,
+            'model'    => $model
         ];
 
         $aiService = new AiService($provider, $config);
