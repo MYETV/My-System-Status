@@ -54,6 +54,54 @@ class DateService
     }
 
     /**
+     * Convert a local datetime input (e.g. from datetime-local input) from a specific timezone into UTC string for database storage.
+     */
+    public static function toUtc(?string $localDateString, ?string $fromTimezone = null): ?string
+    {
+        if (empty($localDateString)) {
+            return null;
+        }
+
+        try {
+            $tzString = (!empty($fromTimezone) && self::isValidTimezone($fromTimezone))
+                ? $fromTimezone
+                : self::getActiveTimezone();
+
+            $tz = new DateTimeZone($tzString);
+            $date = new DateTime($localDateString, $tz);
+            $date->setTimezone(new DateTimeZone('UTC'));
+
+            return $date->format('Y-m-d H:i:s');
+        } catch (Exception $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Convert a UTC datetime string into a specified timezone formatted for datetime-local or custom view.
+     */
+    public static function toLocal(?string $utcDateString, ?string $toTimezone = null, string $format = 'Y-m-d\TH:i'): ?string
+    {
+        if (empty($utcDateString)) {
+            return null;
+        }
+
+        try {
+            $tzString = (!empty($toTimezone) && self::isValidTimezone($toTimezone))
+                ? $toTimezone
+                : self::getActiveTimezone();
+
+            $tz = new DateTimeZone($tzString);
+            $date = new DateTime($utcDateString, new DateTimeZone('UTC'));
+            $date->setTimezone($tz);
+
+            return $date->format($format);
+        } catch (Exception $e) {
+            return null;
+        }
+    }
+
+    /**
      * Get list of all standard PHP timezone identifiers grouped by region.
      */
     public static function getTimezonesList(): array
