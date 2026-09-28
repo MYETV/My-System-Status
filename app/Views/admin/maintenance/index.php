@@ -1,4 +1,8 @@
 <!-- path: app/Views/admin/maintenance/index.php -->
+<?php
+$activeTimezone = $activeTimezone ?? \App\Services\DateService::getActiveTimezone();
+$timezonesList  = $timezonesList ?? \App\Services\DateService::getTimezonesList();
+?>
 <div class="container-fluid py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
@@ -76,16 +80,21 @@
                                         <strong class="text-dark d-block"><?= htmlspecialchars($m['title']) ?></strong>
                                         <small class="text-muted"><?= htmlspecialchars(mb_strimwidth($m['description'] ?? '', 0, 80, '...')) ?></small>
                                     </td>
-                                    <td><small class="text-muted"><?= format_date($m['start_time'], 'M d, Y H:i') ?></small></td>
-                                    <td><small class="text-muted"><?= format_date($m['end_time'], 'M d, Y H:i') ?></small></td>
+                                    <td>
+                                        <small class="text-muted"><?= format_date($m['start_time'], 'M d, Y H:i') ?></small>
+                                    </td>
+                                    <td>
+                                        <small class="text-muted"><?= format_date($m['end_time'], 'M d, Y H:i') ?></small>
+                                    </td>
                                     <td class="text-end">
                                         <!-- Quick Mark as Completed Button -->
                                         <form action="/admin/maintenance/update" method="POST" class="d-inline">
                                             <input type="hidden" name="maintenance_id" value="<?= $m['id'] ?>">
                                             <input type="hidden" name="title" value="<?= htmlspecialchars($m['title']) ?>">
                                             <input type="hidden" name="description" value="<?= htmlspecialchars($m['description'] ?? '') ?>">
-                                            <input type="hidden" name="start_time" value="<?= date('Y-m-d\TH:i', strtotime($m['start_time'])) ?>">
-                                            <input type="hidden" name="end_time" value="<?= date('Y-m-d\TH:i', strtotime($m['end_time'])) ?>">
+                                            <input type="hidden" name="start_time" value="<?= $m['start_local'] ?>">
+                                            <input type="hidden" name="end_time" value="<?= $m['end_local'] ?>">
+                                            <input type="hidden" name="timezone" value="<?= htmlspecialchars($m['timezone'] ?? $activeTimezone) ?>">
                                             <input type="hidden" name="status" value="completed">
                                             <button type="submit" class="btn btn-sm btn-success me-1" title="Mark as Completed">
                                                 <i class="bi bi-check-lg me-1"></i> Complete
@@ -94,7 +103,7 @@
 
                                         <!-- Edit Modal Trigger -->
                                         <button class="btn btn-sm btn-outline-secondary me-1" 
-                                                onclick="openEditMaintenanceModal(<?= $m['id'] ?>, '<?= htmlspecialchars(addslashes($m['title'])) ?>', '<?= htmlspecialchars(addslashes($m['description'] ?? '')) ?>', '<?= date('Y-m-d\TH:i', strtotime($m['start_time'])) ?>', '<?= date('Y-m-d\TH:i', strtotime($m['end_time'])) ?>', '<?= $m['status'] ?>')"
+                                                onclick="openEditMaintenanceModal(<?= $m['id'] ?>, '<?= htmlspecialchars(addslashes($m['title'])) ?>', '<?= htmlspecialchars(addslashes($m['description'] ?? '')) ?>', '<?= $m['start_local'] ?>', '<?= $m['end_local'] ?>', '<?= $m['status'] ?>', '<?= $m['monitor_id'] ?? '' ?>', '<?= htmlspecialchars(addslashes($m['timezone'] ?? $activeTimezone)) ?>')"
                                                 title="Edit Details">
                                             <i class="bi bi-pencil"></i>
                                         </button>
@@ -157,6 +166,12 @@
                                         </span>
                                     </td>
                                     <td class="text-end">
+                                        <button class="btn btn-sm btn-outline-secondary me-1" 
+                                                onclick="openEditMaintenanceModal(<?= $p['id'] ?>, '<?= htmlspecialchars(addslashes($p['title'])) ?>', '<?= htmlspecialchars(addslashes($p['description'] ?? '')) ?>', '<?= $p['start_local'] ?>', '<?= $p['end_local'] ?>', '<?= $p['status'] ?>', '<?= $p['monitor_id'] ?? '' ?>', '<?= htmlspecialchars(addslashes($p['timezone'] ?? $activeTimezone)) ?>')"
+                                                title="Edit Details">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+
                                         <form action="/admin/maintenance/delete" method="POST" class="d-inline" onsubmit="return confirm('Delete this archived record?');">
                                             <input type="hidden" name="maintenance_id" value="<?= $p['id'] ?>">
                                             <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete">
@@ -192,15 +207,15 @@
                     <textarea name="description" class="form-control" rows="3" placeholder="Describe the expected impact or downtime window..."></textarea>
                 </div>
                 <div class="mb-3">
-    <label class="form-label fw-semibold">Target Service (Optional)</label>
-    <select name="monitor_id" class="form-select">
-        <option value="">All Services (Global Maintenance)</option>
-        <?php foreach ($monitorsList as $m): ?>
-            <option value="<?= $m['id'] ?>"><?= htmlspecialchars($m['name']) ?></option>
-        <?php endforeach; ?>
-    </select>
-    <small class="text-muted">Associates this maintenance window to the selected service bar.</small>
-</div>
+                    <label class="form-label fw-semibold">Target Service (Optional)</label>
+                    <select name="monitor_id" class="form-select">
+                        <option value="">All Services (Global Maintenance)</option>
+                        <?php foreach ($monitorsList as $m): ?>
+                            <option value="<?= $m['id'] ?>"><?= htmlspecialchars($m['name']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <small class="text-muted">Associates this maintenance window to the selected service bar.</small>
+                </div>
                 <div class="row g-2 mb-3">
                     <div class="col-md-6">
                         <label class="form-label fw-semibold">Start Window</label>
@@ -211,12 +226,22 @@
                         <input type="datetime-local" name="end_time" class="form-control" required>
                     </div>
                 </div>
-                <div class="mb-2">
-                    <label class="form-label fw-semibold">Initial Status</label>
-                    <select name="status" class="form-select">
-                        <option value="scheduled" selected>Scheduled</option>
-                        <option value="in_progress">In Progress</option>
-                    </select>
+                <div class="row g-2 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Initial Status</label>
+                        <select name="status" class="form-select">
+                            <option value="scheduled" selected>Scheduled</option>
+                            <option value="in_progress">In Progress</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold"><i class="bi bi-clock me-1"></i> Timezone</label>
+                        <select name="timezone" class="form-select">
+                            <?php foreach ($timezonesList as $tz): ?>
+                                <option value="<?= $tz ?>" <?= $tz === $activeTimezone ? 'selected' : '' ?>><?= $tz ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -227,7 +252,7 @@
     </div>
 </div>
 
-<!-- Modal 2: Edit Maintenance (Opened via button or calendar event click) -->
+<!-- Modal 2: Edit Maintenance -->
 <div class="modal fade" id="editMaintenanceModal" tabindex="-1">
     <div class="modal-dialog">
         <form action="/admin/maintenance/update" method="POST" class="modal-content shadow">
@@ -245,16 +270,16 @@
                     <label class="form-label fw-semibold">Description</label>
                     <textarea name="description" id="editMaintDesc" class="form-control" rows="3"></textarea>
                 </div>
-<div class="mb-3">
-    <label class="form-label fw-semibold">Target Service (Optional)</label>
-    <select name="monitor_id" class="form-select">
-        <option value="">All Services (Global Maintenance)</option>
-        <?php foreach ($monitorsList as $m): ?>
-            <option value="<?= $m['id'] ?>"><?= htmlspecialchars($m['name']) ?></option>
-        <?php endforeach; ?>
-    </select>
-    <small class="text-muted">Associates this maintenance window to the selected service bar.</small>
-</div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Target Service (Optional)</label>
+                    <select name="monitor_id" id="editMaintMonitorId" class="form-select">
+                        <option value="">All Services (Global Maintenance)</option>
+                        <?php foreach ($monitorsList as $m): ?>
+                            <option value="<?= $m['id'] ?>"><?= htmlspecialchars($m['name']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <small class="text-muted">Associates this maintenance window to the selected service bar.</small>
+                </div>
                 <div class="row g-2 mb-3">
                     <div class="col-md-6">
                         <label class="form-label fw-semibold">Start Window</label>
@@ -265,13 +290,23 @@
                         <input type="datetime-local" name="end_time" id="editMaintEnd" class="form-control" required>
                     </div>
                 </div>
-                <div class="mb-2">
-                    <label class="form-label fw-semibold">Status</label>
-                    <select name="status" id="editMaintStatus" class="form-select">
-                        <option value="scheduled">Scheduled</option>
-                        <option value="in_progress">In Progress</option>
-                        <option value="completed" class="text-success fw-bold">Completed (Archive to past events)</option>
-                    </select>
+                <div class="row g-2 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Status</label>
+                        <select name="status" id="editMaintStatus" class="form-select">
+                            <option value="scheduled">Scheduled</option>
+                            <option value="in_progress">In Progress</option>
+                            <option value="completed" class="text-success fw-bold">Completed (Archive to past events)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold"><i class="bi bi-clock me-1"></i> Timezone</label>
+                        <select name="timezone" id="editMaintTimezone" class="form-select">
+                            <?php foreach ($timezonesList as $tz): ?>
+                                <option value="<?= $tz ?>"><?= $tz ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -295,7 +330,6 @@ document.addEventListener('DOMContentLoaded', function() {
             right: 'dayGridMonth,timeGridWeek,timeGridDay'
         },
         events: '/admin/maintenance/events',
-        // Click on calendar event to open edit modal immediately!
         eventClick: function(info) {
             info.jsEvent.preventDefault();
             const event = info.event;
@@ -306,20 +340,28 @@ document.addEventListener('DOMContentLoaded', function() {
                 props.description || '',
                 props.start_raw,
                 props.end_raw,
-                props.status
+                props.status,
+                props.monitor_id,
+                props.timezone
             );
         }
     });
     calendar.render();
 });
 
-function openEditMaintenanceModal(id, title, desc, start, end, status) {
+function openEditMaintenanceModal(id, title, desc, start, end, status, monitorId, timezone) {
     document.getElementById('editMaintId').value = id;
     document.getElementById('editMaintTitle').value = title;
     document.getElementById('editMaintDesc').value = desc;
     document.getElementById('editMaintStart').value = start;
     document.getElementById('editMaintEnd').value = end;
     document.getElementById('editMaintStatus').value = status;
+    if (monitorId !== undefined) {
+        document.getElementById('editMaintMonitorId').value = monitorId || '';
+    }
+    if (timezone) {
+        document.getElementById('editMaintTimezone').value = timezone;
+    }
     new bootstrap.Modal(document.getElementById('editMaintenanceModal')).show();
 }
 </script>
