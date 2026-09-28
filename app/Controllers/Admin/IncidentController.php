@@ -8,6 +8,7 @@ use App\Core\View;
 use App\Services\AiService;
 use App\Services\SettingService;
 use App\Services\MailerService;
+use App\Services\DateService;
 use App\Services\ContentTranslationService;
 use PDO;
 
@@ -28,33 +29,43 @@ class IncidentController
 
     public function index(): void
     {
+        $activeTz = DateService::getActiveTimezone();
+
         // 1. Fetch Active (Ongoing) Incidents
         $stmtActive = $this->db->query("
             SELECT * FROM incidents 
             WHERE status != 'resolved' 
-            ORDER BY created_at DESC
+            ORDER BY COALESCE(start_time, created_at) DESC
         ");
         $activeIncidents = $stmtActive->fetchAll(PDO::FETCH_ASSOC);
 
         foreach ($activeIncidents as &$inc) {
+            $inc['start_local'] = DateService::toLocal($inc['start_time'] ?? $inc['created_at'], $activeTz);
+            $inc['end_local']   = !empty($inc['end_time']) ? DateService::toLocal($inc['end_time'], $activeTz) : '';
+
             $upStmt = $this->db->prepare("SELECT * FROM incident_updates WHERE incident_id = ? ORDER BY created_at DESC");
             $upStmt->execute([$inc['id']]);
             $inc['updates'] = $upStmt->fetchAll(PDO::FETCH_ASSOC);
         }
+        unset($inc);
 
         // 2. Fetch Past (Resolved) Incidents
         $stmtPast = $this->db->query("
             SELECT * FROM incidents 
             WHERE status = 'resolved' 
-            ORDER BY updated_at DESC, id DESC LIMIT 50
+            ORDER BY COALESCE(end_time, updated_at) DESC, id DESC LIMIT 50
         ");
         $resolvedIncidents = $stmtPast->fetchAll(PDO::FETCH_ASSOC);
 
         foreach ($resolvedIncidents as &$inc) {
+            $inc['start_local'] = DateService::toLocal($inc['start_time'] ?? $inc['created_at'], $activeTz);
+            $inc['end_local']   = !empty($inc['end_time']) ? DateService::toLocal($inc['end_time'], $activeTz) : '';
+
             $upStmt = $this->db->prepare("SELECT * FROM incident_updates WHERE incident_id = ? ORDER BY created_at DESC");
             $upStmt->execute([$inc['id']]);
             $inc['updates'] = $upStmt->fetchAll(PDO::FETCH_ASSOC);
         }
+        unset($inc);
 
         // 3. Fetch monitors list for modal dropdown selection
         $monitorsList = $this->db->query("
@@ -67,25 +78,43 @@ class IncidentController
         View::render('admin/incidents/index', [
             'activeIncidents'   => $activeIncidents,
             'resolvedIncidents' => $resolvedIncidents,
-            'monitorsList'      => $monitorsList
+            'monitorsList'      => $monitorsList,
+            'activeTimezone'    => $activeTz,
+            'timezonesList'     => DateService::getTimezonesList()
         ]);
     }
 
     public function store(): void
     {
-        $title     = trim($_POST['title'] ?? '');
-        $monitorId = !empty($_POST['monitor_id']) ? (int)$_POST['monitor_id'] : null;
-        $impact    = $_POST['impact'] ?? 'minor';
-        $status    = $_POST['status'] ?? 'investigating';
-        $message   = trim($_POST['message'] ?? '');
-        $aiSummary = trim($_POST['ai_summary'] ?? '');
+        $title          = trim($_POST['title'] ?? '');
+        $monitorId      = !empty($_POST['monitor_id']) ? (int)$_POST['monitor_id'] : null;
+        $impact         = $_POST['impact'] ?? 'minor';
+        $status         = $_POST['status'] ?? 'investigating';
+        $message        = trim($_POST['message'] ?? '');
+        $aiSummary      = trim($_POST['ai_summary'] ?? '');
+        $timezone       = trim($_POST['timezone'] ?? DateService::getActiveTimezone());
+        $startTimeInput = trim($_POST['start_time'] ?? '');
+        $endTimeInput   = trim($_POST['end_time'] ?? '');
+
+        if (!DateService::isValidTimezone($timezone)) {
+            $timezone = DateService::getActiveTimezone();
+        }
+
+        // Convert localized input times to UTC for database persistence
+        $utcStartTime = !empty($startTimeInput)
+            ? DateService::toUtc($startTimeInput, $timezone)
+            : gmdate('Y-m-d H:i:s');
+
+        $utcEndTime = !empty($endTimeInput)
+            ? DateService::toUtc($endTimeInput, $timezone)
+            : null;
 
         if ($title && $message) {
             $stmt = $this->db->prepare("
-                INSERT INTO incidents (title, monitor_id, impact, status, ai_summary) 
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO incidents (title, monitor_id, impact, status, ai_summary, start_time, end_time, timezone) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ");
-            $stmt->execute([$title, $monitorId, $impact, $status, $aiSummary]);
+            $stmt->execute([$title, $monitorId, $impact, $status, $aiSummary, $utcStartTime, $utcEndTime, $timezone]);
             $incidentId = (int)$this->db->lastInsertId();
 
             $stmtUpdate = $this->db->prepare("
@@ -112,12 +141,25 @@ class IncidentController
         $message    = trim($_POST['message'] ?? '');
 
         if ($incidentId > 0 && $message) {
-            $stmtInc = $this->db->prepare("SELECT title, monitor_id, impact FROM incidents WHERE id = ? LIMIT 1");
+            $stmtInc = $this->db->prepare("SELECT title, monitor_id, impact, end_time FROM incidents WHERE id = ? LIMIT 1");
             $stmtInc->execute([$incidentId]);
             $incident = $stmtInc->fetch(PDO::FETCH_ASSOC);
 
             if ($incident) {
-                $stmt = $this->db->prepare("UPDATE incidents SET status = ?, updated_at = NOW() WHERE id = ?");
+                // If resolving incident, auto-stamp end_time if not already set
+                if ($status === 'resolved') {
+                    $stmt = $this->db->prepare("
+                        UPDATE incidents 
+                        SET status = ?, end_time = COALESCE(end_time, UTC_TIMESTAMP()), updated_at = UTC_TIMESTAMP() 
+                        WHERE id = ?
+                    ");
+                } else {
+                    $stmt = $this->db->prepare("
+                        UPDATE incidents 
+                        SET status = ?, updated_at = UTC_TIMESTAMP() 
+                        WHERE id = ?
+                    ");
+                }
                 $stmt->execute([$status, $incidentId]);
 
                 $stmtUpdate = $this->db->prepare("
@@ -140,25 +182,35 @@ class IncidentController
     }
 
     /**
-     * Edit incident details (Title, Target Monitor, Impact, AI Summary)
+     * Edit incident details (Title, Target Monitor, Impact, AI Summary, Times & Timezone)
      */
     public function update(): void
     {
-        $incidentId = (int)($_POST['incident_id'] ?? 0);
-        $title      = trim($_POST['title'] ?? '');
-        $monitorId  = !empty($_POST['monitor_id']) ? (int)$_POST['monitor_id'] : null;
-        $impact     = $_POST['impact'] ?? 'minor';
-        $aiSummary  = trim($_POST['ai_summary'] ?? '');
+        $incidentId     = (int)($_POST['incident_id'] ?? 0);
+        $title          = trim($_POST['title'] ?? '');
+        $monitorId      = !empty($_POST['monitor_id']) ? (int)$_POST['monitor_id'] : null;
+        $impact         = $_POST['impact'] ?? 'minor';
+        $aiSummary      = trim($_POST['ai_summary'] ?? '');
+        $timezone       = trim($_POST['timezone'] ?? DateService::getActiveTimezone());
+        $startTimeInput = trim($_POST['start_time'] ?? '');
+        $endTimeInput   = trim($_POST['end_time'] ?? '');
+
+        if (!DateService::isValidTimezone($timezone)) {
+            $timezone = DateService::getActiveTimezone();
+        }
+
+        $utcStartTime = !empty($startTimeInput) ? DateService::toUtc($startTimeInput, $timezone) : null;
+        $utcEndTime   = !empty($endTimeInput) ? DateService::toUtc($endTimeInput, $timezone) : null;
 
         if ($incidentId > 0 && $title) {
             $stmt = $this->db->prepare("
                 UPDATE incidents 
-                SET title = ?, monitor_id = ?, impact = ?, ai_summary = ?, updated_at = NOW() 
+                SET title = ?, monitor_id = ?, impact = ?, ai_summary = ?, start_time = COALESCE(?, start_time), end_time = ?, timezone = ?, updated_at = UTC_TIMESTAMP() 
                 WHERE id = ?
             ");
-            $stmt->execute([$title, $monitorId, $impact, $aiSummary, $incidentId]);
+            $stmt->execute([$title, $monitorId, $impact, $aiSummary, $utcStartTime, $utcEndTime, $timezone, $incidentId]);
 
-            // Reset translation cache when title, impact or AI summary are edited
+            // Reset translation cache when details are edited
             (new ContentTranslationService())->clearCache('incident', $incidentId);
         }
 
