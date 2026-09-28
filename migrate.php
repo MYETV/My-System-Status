@@ -192,6 +192,28 @@ try {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     ");
 
+    // --- v1.0.60: Add start_time, end_time, and timezone to incidents ---
+    if (table_exists($pdo, 'incidents')) {
+        if (!column_exists($pdo, 'incidents', 'start_time')) {
+            $pdo->exec("ALTER TABLE `incidents` ADD COLUMN `start_time` DATETIME NULL AFTER `ai_summary`;");
+            // Backfill start_time from created_at
+            $pdo->exec("UPDATE `incidents` SET `start_time` = `created_at` WHERE `start_time` IS NULL;");
+        }
+        if (!column_exists($pdo, 'incidents', 'end_time')) {
+            $pdo->exec("ALTER TABLE `incidents` ADD COLUMN `end_time` DATETIME NULL AFTER `start_time`;");
+        }
+        if (!column_exists($pdo, 'incidents', 'timezone')) {
+            $pdo->exec("ALTER TABLE `incidents` ADD COLUMN `timezone` VARCHAR(64) NOT NULL DEFAULT 'UTC' AFTER `end_time`;");
+        }
+    }
+
+    // --- v1.0.61: Add timezone to maintenances ---
+    if (table_exists($pdo, 'maintenances')) {
+        if (!column_exists($pdo, 'maintenances', 'timezone')) {
+            $pdo->exec("ALTER TABLE `maintenances` ADD COLUMN `timezone` VARCHAR(64) NOT NULL DEFAULT 'UTC' AFTER `end_time`;");
+        }
+    }
+
     if (php_sapi_name() === 'cli') {
         echo "Database schema is fully up to date.\n";
     }
