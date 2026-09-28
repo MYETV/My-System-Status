@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS `monitor_logs` (
     FOREIGN KEY (`monitor_id`) REFERENCES `monitors` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Incidents (Includes monitor_id for target probe association)
+-- Incidents (Includes start_time, end_time, timezone)
 CREATE TABLE IF NOT EXISTS `incidents` (
     `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     `monitor_id` INT UNSIGNED NULL DEFAULT NULL,
@@ -82,6 +82,9 @@ CREATE TABLE IF NOT EXISTS `incidents` (
     `impact` ENUM('none', 'minor', 'major', 'critical') NOT NULL DEFAULT 'minor',
     `status` ENUM('investigating', 'identified', 'monitoring', 'resolved') NOT NULL DEFAULT 'investigating',
     `ai_summary` TEXT NULL,
+    `start_time` DATETIME NULL,
+    `end_time` DATETIME NULL,
+    `timezone` VARCHAR(64) NOT NULL DEFAULT 'UTC',
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX `idx_inc_monitor` (`monitor_id`),
@@ -98,7 +101,7 @@ CREATE TABLE IF NOT EXISTS `incident_updates` (
     FOREIGN KEY (`incident_id`) REFERENCES `incidents` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Scheduled Maintenance (Includes monitor_id for target probe association)
+-- Scheduled Maintenance (Includes timezone)
 CREATE TABLE IF NOT EXISTS `maintenances` (
     `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     `monitor_id` INT UNSIGNED NULL DEFAULT NULL,
@@ -107,6 +110,7 @@ CREATE TABLE IF NOT EXISTS `maintenances` (
     `status` ENUM('scheduled', 'in_progress', 'completed') DEFAULT 'scheduled',
     `start_time` DATETIME NOT NULL,
     `end_time` DATETIME NOT NULL,
+    `timezone` VARCHAR(64) NOT NULL DEFAULT 'UTC',
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX `idx_maint_monitor` (`monitor_id`),
     FOREIGN KEY (`monitor_id`) REFERENCES `monitors` (`id`) ON DELETE SET NULL
@@ -165,6 +169,18 @@ CREATE TABLE IF NOT EXISTS `translations_cache` (
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY `uniq_translation` (`entity_type`, `entity_id`, `locale`, `field`),
     INDEX `idx_lookup` (`entity_type`, `entity_id`, `locale`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `user_remember_tokens` (
+    `id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    `user_id` INT UNSIGNED NOT NULL,
+    `selector` VARCHAR(32) NOT NULL UNIQUE,
+    `token_hash` VARCHAR(64) NOT NULL,
+    `expires_at` DATETIME NOT NULL,
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX `idx_selector` (`selector`),
+    INDEX `idx_user` (`user_id`),
+    FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 SET FOREIGN_KEY_CHECKS = 1;
