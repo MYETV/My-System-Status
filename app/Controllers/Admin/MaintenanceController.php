@@ -6,6 +6,7 @@ namespace App\Controllers\Admin;
 use App\Core\Database;
 use App\Core\View;
 use App\Services\MailerService;
+use App\Services\DateService;
 use App\Services\ContentTranslationService;
 use PDO;
 
@@ -26,6 +27,8 @@ class MaintenanceController
 
     public function index(): void
     {
+        $activeTz = DateService::getActiveTimezone();
+
         // 1. Active & Upcoming Maintenances
         $stmtUpcoming = $this->db->query("
             SELECT * FROM maintenances 
@@ -34,13 +37,25 @@ class MaintenanceController
         ");
         $upcoming = $stmtUpcoming->fetchAll(PDO::FETCH_ASSOC);
 
+        foreach ($upcoming as &$m) {
+            $m['start_local'] = DateService::toLocal($m['start_time'], $activeTz);
+            $m['end_local']   = DateService::toLocal($m['end_time'], $activeTz);
+        }
+        unset($m);
+
         // 2. Past & Completed Maintenances
         $stmtPast = $this->db->query("
             SELECT * FROM maintenances 
-            WHERE status = 'completed' OR end_time < NOW() 
+            WHERE status = 'completed' OR end_time < UTC_TIMESTAMP() 
             ORDER BY end_time DESC LIMIT 50
         ");
         $past = $stmtPast->fetchAll(PDO::FETCH_ASSOC);
+
+        foreach ($past as &$m) {
+            $m['start_local'] = DateService::toLocal($m['start_time'], $activeTz);
+            $m['end_local']   = DateService::toLocal($m['end_time'], $activeTz);
+        }
+        unset($m);
 
         // 3. Fetch monitors list for modal dropdown selection
         $monitorsList = $this->db->query("
@@ -51,40 +66,49 @@ class MaintenanceController
         ")->fetchAll(PDO::FETCH_ASSOC);
 
         View::render('admin/maintenance/index', [
-            'upcoming'     => $upcoming,
-            'past'         => $past,
-            'monitorsList' => $monitorsList
+            'upcoming'       => $upcoming,
+            'past'           => $past,
+            'monitorsList'   => $monitorsList,
+            'activeTimezone' => $activeTz,
+            'timezonesList'  => DateService::getTimezonesList()
         ]);
     }
 
     /**
-     * Feed for FullCalendar (JSON) with full payload including monitor_id
+     * Feed for FullCalendar (JSON) with full payload including monitor_id and timezone conversion
      */
     public function events(): void
     {
         header('Content-Type: application/json');
+        $activeTz = DateService::getActiveTimezone();
+
         $stmt = $this->db->query("SELECT * FROM maintenances");
         $events = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        $mapped = array_map(function ($ev) {
+        $mapped = array_map(function ($ev) use ($activeTz) {
             $color = match ($ev['status']) {
                 'scheduled'   => '#0d6efd',
                 'in_progress' => '#ffc107',
                 'completed'   => '#198754',
                 default       => '#6c757d'
             };
+
+            $startLocal = DateService::toLocal($ev['start_time'], $activeTz);
+            $endLocal   = DateService::toLocal($ev['end_time'], $activeTz);
+
             return [
                 'id'            => (string)$ev['id'],
                 'title'         => $ev['title'],
-                'start'         => date('c', strtotime($ev['start_time'])),
-                'end'           => date('c', strtotime($ev['end_time'])),
+                'start'         => $startLocal,
+                'end'           => $endLocal,
                 'color'         => $color,
                 'extendedProps' => [
                     'description' => $ev['description'] ?? '',
                     'status'      => $ev['status'],
                     'monitor_id'  => $ev['monitor_id'] ?? '',
-                    'start_raw'   => date('Y-m-d\TH:i', strtotime($ev['start_time'])),
-                    'end_raw'     => date('Y-m-d\TH:i', strtotime($ev['end_time']))
+                    'timezone'    => $ev['timezone'] ?? $activeTz,
+                    'start_raw'   => $startLocal,
+                    'end_raw'     => $endLocal
                 ]
             ];
         }, $events);
@@ -98,19 +122,27 @@ class MaintenanceController
         $title       = trim($_POST['title'] ?? '');
         $monitorId   = !empty($_POST['monitor_id']) ? (int)$_POST['monitor_id'] : null;
         $description = trim($_POST['description'] ?? '');
-        $start       = $_POST['start_time'] ?? '';
-        $end         = $_POST['end_time'] ?? '';
+        $startInput  = $_POST['start_time'] ?? '';
+        $endInput    = $_POST['end_time'] ?? '';
         $status      = $_POST['status'] ?? 'scheduled';
+        $timezone    = trim($_POST['timezone'] ?? DateService::getActiveTimezone());
 
-        if ($title && $start && $end) {
+        if (!DateService::isValidTimezone($timezone)) {
+            $timezone = DateService::getActiveTimezone();
+        }
+
+        $utcStart = DateService::toUtc($startInput, $timezone);
+        $utcEnd   = DateService::toUtc($endInput, $timezone);
+
+        if ($title && $utcStart && $utcEnd) {
             $stmt = $this->db->prepare("
-                INSERT INTO maintenances (title, monitor_id, description, start_time, end_time, status)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO maintenances (title, monitor_id, description, start_time, end_time, timezone, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
             ");
-            $stmt->execute([$title, $monitorId, $description, $start, $end, $status]);
+            $stmt->execute([$title, $monitorId, $description, $utcStart, $utcEnd, $timezone, $status]);
 
             // Notify verified subscribers via SMTP email
-            $this->sendMaintenanceEmailNotifications($title, $monitorId, $description, $start, $end, $status, false);
+            $this->sendMaintenanceEmailNotifications($title, $monitorId, $description, $utcStart, $utcEnd, $status, false);
         }
 
         header('Location: /admin/maintenance?created=1');
@@ -123,23 +155,31 @@ class MaintenanceController
         $title       = trim($_POST['title'] ?? '');
         $monitorId   = !empty($_POST['monitor_id']) ? (int)$_POST['monitor_id'] : null;
         $description = trim($_POST['description'] ?? '');
-        $start       = $_POST['start_time'] ?? '';
-        $end         = $_POST['end_time'] ?? '';
+        $startInput  = $_POST['start_time'] ?? '';
+        $endInput    = $_POST['end_time'] ?? '';
         $status      = $_POST['status'] ?? 'scheduled';
+        $timezone    = trim($_POST['timezone'] ?? DateService::getActiveTimezone());
 
-        if ($id > 0 && $title && $start && $end) {
+        if (!DateService::isValidTimezone($timezone)) {
+            $timezone = DateService::getActiveTimezone();
+        }
+
+        $utcStart = DateService::toUtc($startInput, $timezone);
+        $utcEnd   = DateService::toUtc($endInput, $timezone);
+
+        if ($id > 0 && $title && $utcStart && $utcEnd) {
             $stmt = $this->db->prepare("
                 UPDATE maintenances 
-                SET title = ?, monitor_id = ?, description = ?, start_time = ?, end_time = ?, status = ? 
+                SET title = ?, monitor_id = ?, description = ?, start_time = ?, end_time = ?, timezone = ?, status = ? 
                 WHERE id = ?
             ");
-            $stmt->execute([$title, $monitorId, $description, $start, $end, $status, $id]);
+            $stmt->execute([$title, $monitorId, $description, $utcStart, $utcEnd, $timezone, $status, $id]);
 
             // Clear cached translations for this maintenance window
             (new ContentTranslationService())->clearCache('maintenance', $id);
 
             // Notify verified subscribers about the maintenance update/completion
-            $this->sendMaintenanceEmailNotifications($title, $monitorId, $description, $start, $end, $status, true);
+            $this->sendMaintenanceEmailNotifications($title, $monitorId, $description, $utcStart, $utcEnd, $status, true);
         }
 
         header('Location: /admin/maintenance?updated=1');
@@ -205,7 +245,7 @@ class MaintenanceController
     /**
      * Send email notifications to all verified global and monitor-specific subscribers.
      */
-    private function sendMaintenanceEmailNotifications(string $title, ?int $monitorId, string $description, string $start, string $end, string $status, bool $isUpdate = false): void
+    private function sendMaintenanceEmailNotifications(string $title, ?int $monitorId, string $description, string $utcStart, string $utcEnd, string $status, bool $isUpdate = false): void
     {
         $smtpHost = setting('smtp_host', '');
         if (empty($smtpHost)) {
@@ -260,8 +300,8 @@ class MaintenanceController
         $subjectPrefix = $isUpdate ? "[UPDATE]" : "[MAINTENANCE]";
         $subject = "{$subjectPrefix} {$title} - {$appName}";
 
-        $formattedStart = date('M d, Y H:i', strtotime($start));
-        $formattedEnd   = date('M d, Y H:i T', strtotime($end));
+        $formattedStart = format_date($utcStart, 'M d, Y H:i');
+        $formattedEnd   = format_date($utcEnd, 'M d, Y H:i T');
 
         foreach ($subscribers as $sub) {
             $unsubUrl = $appUrl . "/subscribe/confirm-unsubscribe?token=" . urlencode($sub['token']);
