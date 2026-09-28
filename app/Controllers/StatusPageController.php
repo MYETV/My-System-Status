@@ -8,6 +8,7 @@ use App\Core\View;
 use App\Services\MailerService;
 use App\Services\SubscriberService;
 use App\Services\SettingService;
+use App\Services\DateService;
 use App\Services\ContentTranslationService;
 use PDO;
 
@@ -46,7 +47,7 @@ class StatusPageController
         $maintenances = $this->db->query("
             SELECT * FROM maintenances 
             WHERE status IN ('scheduled', 'in_progress') 
-            AND end_time >= NOW() 
+            AND end_time >= UTC_TIMESTAMP() 
             ORDER BY start_time ASC
         ")->fetchAll(PDO::FETCH_ASSOC);
 
@@ -54,7 +55,7 @@ class StatusPageController
         $incidents = $this->db->query("
             SELECT * FROM incidents 
             WHERE status != 'resolved' 
-            ORDER BY created_at DESC
+            ORDER BY COALESCE(start_time, created_at) DESC
         ")->fetchAll(PDO::FETCH_ASSOC);
 
         foreach ($incidents as &$incident) {
@@ -126,7 +127,7 @@ class StatusPageController
 
         // 7. Map 90-Day Incidents (WITH timeline notes) and Maintenances per Monitor and Date
         $incStmt = $this->db->query("
-            SELECT id, monitor_id, title, impact, status, created_at, updated_at 
+            SELECT id, monitor_id, title, impact, status, ai_summary, start_time, end_time, timezone, created_at, updated_at 
             FROM incidents 
             WHERE created_at >= DATE_SUB(NOW(), INTERVAL 90 DAY) OR status != 'resolved'
         ");
@@ -145,7 +146,7 @@ class StatusPageController
         unset($inc);
 
         $maintStmt = $this->db->query("
-            SELECT id, monitor_id, title, description, status, start_time, end_time 
+            SELECT id, monitor_id, title, description, status, start_time, end_time, timezone 
             FROM maintenances 
             WHERE start_time >= DATE_SUB(NOW(), INTERVAL 90 DAY) OR end_time >= DATE_SUB(NOW(), INTERVAL 90 DAY)
         ");
