@@ -1,8 +1,9 @@
-<!-- path: app/Views/admin/incidents/index.php -->
 <?php
 // Fallbacks to avoid unhandled variable notices
 $activeIncidents   = $activeIncidents ?? [];
 $resolvedIncidents = $resolvedIncidents ?? [];
+$activeTimezone    = $activeTimezone ?? \App\Services\DateService::getActiveTimezone();
+$timezonesList     = $timezonesList ?? \App\Services\DateService::getTimezonesList();
 ?>
 <div class="container-fluid py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
@@ -63,7 +64,7 @@ $resolvedIncidents = $resolvedIncidents ?? [];
                                 <th>Impact</th>
                                 <th>Incident Title</th>
                                 <th>Current Status</th>
-                                <th>Created At</th>
+                                <th>Start Window</th>
                                 <th class="text-end">Actions</th>
                             </tr>
                         </thead>
@@ -87,7 +88,10 @@ $resolvedIncidents = $resolvedIncidents ?? [];
                                         </span>
                                     </td>
                                     <td>
-                                        <small class="text-muted"><?= format_date($inc['created_at'], 'M d, H:i') ?></small>
+                                        <small class="text-muted">
+                                            <?= format_date($inc['start_time'] ?? $inc['created_at'], 'M d, H:i') ?>
+                                            <span class="badge bg-light text-muted border ms-1"><?= htmlspecialchars($inc['timezone'] ?? 'UTC') ?></span>
+                                        </small>
                                     </td>
                                     <td class="text-end">
                                         <button class="btn btn-sm btn-primary me-1" 
@@ -97,7 +101,7 @@ $resolvedIncidents = $resolvedIncidents ?? [];
                                         </button>
 
                                         <button class="btn btn-sm btn-outline-secondary me-1" 
-                                                onclick="openEditModal(<?= $inc['id'] ?>, '<?= htmlspecialchars(addslashes($inc['title'])) ?>', '<?= $inc['impact'] ?>', '<?= htmlspecialchars(addslashes($inc['ai_summary'] ?? '')) ?>')"
+                                                onclick="openEditModal(<?= $inc['id'] ?>, '<?= htmlspecialchars(addslashes($inc['title'])) ?>', '<?= $inc['impact'] ?>', '<?= htmlspecialchars(addslashes($inc['ai_summary'] ?? '')) ?>', '<?= $inc['monitor_id'] ?? '' ?>', '<?= $inc['start_local'] ?? '' ?>', '<?= $inc['end_local'] ?? '' ?>', '<?= htmlspecialchars(addslashes($inc['timezone'] ?? $activeTimezone)) ?>')"
                                                 title="Edit Incident Details">
                                             <i class="bi bi-pencil"></i>
                                         </button>
@@ -138,7 +142,7 @@ $resolvedIncidents = $resolvedIncidents ?? [];
                             <tr>
                                 <th>Incident Title</th>
                                 <th>Impact</th>
-                                <th>Resolved Date</th>
+                                <th>Timeline Period</th>
                                 <th class="text-end">Actions</th>
                             </tr>
                         </thead>
@@ -157,13 +161,23 @@ $resolvedIncidents = $resolvedIncidents ?? [];
                                         </span>
                                     </td>
                                     <td>
-                                        <small class="text-muted"><?= format_date($inc['updated_at'], 'M d, Y H:i') ?></small>
+                                        <small class="text-muted">
+                                            <?= format_date($inc['start_time'] ?? $inc['created_at'], 'M d, H:i') ?>
+                                            &mdash;
+                                            <?= format_date($inc['end_time'] ?? $inc['updated_at'], 'M d, Y H:i') ?>
+                                        </small>
                                     </td>
                                     <td class="text-end">
                                         <button class="btn btn-sm btn-outline-warning me-1" 
                                                 onclick="openUpdateModal(<?= $inc['id'] ?>, '<?= htmlspecialchars(addslashes($inc['title'])) ?>', 'monitoring')"
                                                 title="Reopen Incident">
                                             <i class="bi bi-arrow-counterclockwise"></i> Reopen
+                                        </button>
+
+                                        <button class="btn btn-sm btn-outline-secondary me-1" 
+                                                onclick="openEditModal(<?= $inc['id'] ?>, '<?= htmlspecialchars(addslashes($inc['title'])) ?>', '<?= $inc['impact'] ?>', '<?= htmlspecialchars(addslashes($inc['ai_summary'] ?? '')) ?>', '<?= $inc['monitor_id'] ?? '' ?>', '<?= $inc['start_local'] ?? '' ?>', '<?= $inc['end_local'] ?? '' ?>', '<?= htmlspecialchars(addslashes($inc['timezone'] ?? $activeTimezone)) ?>')"
+                                                title="Edit Incident Details">
+                                            <i class="bi bi-pencil"></i>
                                         </button>
 
                                         <form action="/admin/incidents/delete" method="POST" class="d-inline" onsubmit="return confirm('Permanently delete this archived incident?');">
@@ -230,14 +244,45 @@ $resolvedIncidents = $resolvedIncidents ?? [];
                     <label class="form-label fw-semibold">Incident Title</label>
                     <input type="text" name="title" id="editModalTitleInput" class="form-control" required>
                 </div>
-                <div class="mb-3">
-                    <label class="form-label fw-semibold">Impact Severity</label>
-                    <select name="impact" id="editModalImpactSelect" class="form-select">
-                        <option value="minor">Minor Performance Degradation</option>
-                        <option value="major">Major Service Disruption</option>
-                        <option value="critical">Critical Outage</option>
-                    </select>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Impact Severity</label>
+                        <select name="impact" id="editModalImpactSelect" class="form-select">
+                            <option value="minor">Minor Performance Degradation</option>
+                            <option value="major">Major Service Disruption</option>
+                            <option value="critical">Critical Outage</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Affected Service</label>
+                        <select name="monitor_id" id="editModalMonitorSelect" class="form-select">
+                            <option value="">All Services (Global Incident)</option>
+                            <?php foreach ($monitorsList as $m): ?>
+                                <option value="<?= $m['id'] ?>"><?= htmlspecialchars($m['name']) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
                 </div>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Start Time</label>
+                        <input type="datetime-local" name="start_time" id="editModalStartTimeInput" class="form-control" required>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">End Time (Optional)</label>
+                        <input type="datetime-local" name="end_time" id="editModalEndTimeInput" class="form-control">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold"><i class="bi bi-clock me-1"></i> Timezone</label>
+                        <select name="timezone" id="editModalTimezoneSelect" class="form-select">
+                            <?php foreach ($timezonesList as $tz): ?>
+                                <option value="<?= $tz ?>"><?= $tz ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                </div>
+
                 <div class="mb-3">
                     <label class="form-label fw-semibold">AI Public Summary</label>
                     <textarea name="ai_summary" id="editModalAiSummaryInput" class="form-control" rows="3"></textarea>
@@ -283,16 +328,35 @@ $resolvedIncidents = $resolvedIncidents ?? [];
                     </div>
                 </div>
 
-<div class="mb-3">
-    <label class="form-label fw-semibold">Affected Service (Optional)</label>
-    <select name="monitor_id" class="form-select">
-        <option value="">All Services (Global Incident)</option>
-        <?php foreach ($monitorsList as $m): ?>
-            <option value="<?= $m['id'] ?>"><?= htmlspecialchars($m['name']) ?></option>
-        <?php endforeach; ?>
-    </select>
-    <small class="text-muted">If selected, this incident will color the 90-day bar of that specific service.</small>
-</div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Affected Service (Optional)</label>
+                    <select name="monitor_id" class="form-select">
+                        <option value="">All Services (Global Incident)</option>
+                        <?php foreach ($monitorsList as $m): ?>
+                            <option value="<?= $m['id'] ?>"><?= htmlspecialchars($m['name']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <small class="text-muted">If selected, this incident will color the 90-day bar of that specific service.</small>
+                </div>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Start Time</label>
+                        <input type="datetime-local" name="start_time" class="form-control" value="<?= \App\Services\DateService::toLocal(gmdate('Y-m-d H:i:s'), $activeTimezone) ?>" required>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">End Time (Optional)</label>
+                        <input type="datetime-local" name="end_time" class="form-control">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold"><i class="bi bi-clock me-1"></i> Timezone</label>
+                        <select name="timezone" class="form-select">
+                            <?php foreach ($timezonesList as $tz): ?>
+                                <option value="<?= $tz ?>" <?= $tz === $activeTimezone ? 'selected' : '' ?>><?= $tz ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                </div>
 
                 <div class="mb-3">
                     <label class="form-label fw-semibold">Technical Error / Raw Logs (for AI analysis)</label>
@@ -330,11 +394,17 @@ function openUpdateModal(id, title, currentStatus) {
     new bootstrap.Modal(document.getElementById('postUpdateModal')).show();
 }
 
-function openEditModal(id, title, impact, aiSummary) {
+function openEditModal(id, title, impact, aiSummary, monitorId, startLocal, endLocal, timezone) {
     document.getElementById('editModalIncidentId').value = id;
     document.getElementById('editModalTitleInput').value = title;
     document.getElementById('editModalImpactSelect').value = impact;
     document.getElementById('editModalAiSummaryInput').value = aiSummary;
+    document.getElementById('editModalMonitorSelect').value = monitorId || '';
+    document.getElementById('editModalStartTimeInput').value = startLocal || '';
+    document.getElementById('editModalEndTimeInput').value = endLocal || '';
+    if (timezone) {
+        document.getElementById('editModalTimezoneSelect').value = timezone;
+    }
     new bootstrap.Modal(document.getElementById('editIncidentModal')).show();
 }
 
