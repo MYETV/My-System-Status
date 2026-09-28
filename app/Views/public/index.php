@@ -31,7 +31,6 @@ $allMaintenances = $allMaintenances ?? [];
         }
 
         .uptime-day-col {
-            /* 30 items per row: ~3.333% minus gap */
             flex: 0 0 calc((100% - 58px) / 30) !important;
             height: 32px !important;
             padding: 2px 0 !important;
@@ -212,7 +211,12 @@ $allMaintenances = $allMaintenances ?? [];
         <?php foreach ($incidents as $incident): ?>
             <div class="card border-danger mb-3 shadow-sm">
                 <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
-                    <strong><?= htmlspecialchars($incident['title']) ?></strong>
+                    <div>
+                        <strong><?= htmlspecialchars($incident['title']) ?></strong>
+                        <small class="badge bg-light bg-opacity-25 text-white ms-2">
+                            <?= format_date($incident['start_time'] ?? $incident['created_at'], 'M d, H:i') ?>
+                        </small>
+                    </div>
                     <span class="badge bg-light text-danger text-uppercase"><?= $incident['status'] ?></span>
                 </div>
                 <div class="card-body">
@@ -249,10 +253,6 @@ $allMaintenances = $allMaintenances ?? [];
         $isDown      = ($monitor['current_status'] === 'down');
         $isDegraded  = ($monitor['current_status'] === 'degraded');
         $mId         = (int)$monitor['id'];
-        
-        $createdDate = !empty($monitor['created_at']) 
-            ? date('Y-m-d', strtotime($monitor['created_at'])) 
-            : date('Y-m-d');
 
         // Cluster Aggregation: Parent combines telemetry from all sub-services
         $monitorHistory = $uptimeHistory[$mId] ?? [];
@@ -343,8 +343,11 @@ $allMaintenances = $allMaintenances ?? [];
                             $dayIncidents = [];
                             foreach ($allIncidents as $inc) {
                                 if (empty($inc['monitor_id']) || (int)$inc['monitor_id'] === $mId) {
-                                    $incStart = date('Y-m-d', strtotime($inc['created_at']));
-                                    $incEnd   = date('Y-m-d', strtotime($inc['updated_at']));
+                                    $rawStart = $inc['start_time'] ?? $inc['created_at'];
+                                    $rawEnd   = $inc['end_time'] ?? ($inc['status'] === 'resolved' ? $inc['updated_at'] : gmdate('Y-m-d H:i:s'));
+                                    $incStart = format_date($rawStart, 'Y-m-d');
+                                    $incEnd   = format_date($rawEnd, 'Y-m-d');
+
                                     if ($dayDate >= $incStart && $dayDate <= $incEnd) {
                                         $dayIncidents[] = $inc;
                                     }
@@ -354,8 +357,8 @@ $allMaintenances = $allMaintenances ?? [];
                             $dayMaintenances = [];
                             foreach ($allMaintenances as $maint) {
                                 if (empty($maint['monitor_id']) || (int)$maint['monitor_id'] === $mId) {
-                                    $mStart = date('Y-m-d', strtotime($maint['start_time']));
-                                    $mEnd   = date('Y-m-d', strtotime($maint['end_time']));
+                                    $mStart = format_date($maint['start_time'], 'Y-m-d');
+                                    $mEnd   = format_date($maint['end_time'], 'Y-m-d');
                                     if ($dayDate >= $mStart && $dayDate <= $mEnd) {
                                         $dayMaintenances[] = $maint;
                                     }
@@ -434,8 +437,8 @@ $allMaintenances = $allMaintenances ?? [];
                                     'title'       => $inc['title'],
                                     'impact'      => strtoupper($inc['impact']),
                                     'status'      => strtoupper($inc['status']),
-                                    'created_at'  => format_date($inc['created_at'], 'M d, Y H:i'),
-                                    'updated_at'  => format_date($inc['updated_at'], 'M d, Y H:i'),
+                                    'created_at'  => format_date($inc['start_time'] ?? $inc['created_at'], 'M d, Y H:i'),
+                                    'updated_at'  => format_date($inc['end_time'] ?? $inc['updated_at'], 'M d, Y H:i'),
                                     'updates'     => array_map(fn($u) => [
                                         'status'  => strtoupper($u['status']),
                                         'message' => $u['message'],
