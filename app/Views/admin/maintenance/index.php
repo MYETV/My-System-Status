@@ -3,11 +3,62 @@
 $activeTimezone = $activeTimezone ?? \App\Services\DateService::getActiveTimezone();
 $timezonesList  = $timezonesList ?? \App\Services\DateService::getTimezonesList();
 ?>
+
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
+<style>
+    /* DataTables Enhancements for Bootstrap 5 Dark Mode */
+    .dataTables_wrapper .dataTables_filter input,
+    .dataTables_wrapper .dataTables_length select {
+        border-radius: 0.375rem;
+        padding: 0.375rem 0.75rem;
+        background-color: var(--bs-body-bg);
+        color: var(--bs-body-color);
+        border: 1px solid var(--bs-border-color);
+    }
+    .dataTables_wrapper .dataTables_length select {
+        padding-right: 2rem;
+    }
+    .dataTables_wrapper .dataTables_filter input:focus,
+    .dataTables_wrapper .dataTables_length select:focus {
+        background-color: var(--bs-body-bg);
+        color: var(--bs-body-color);
+        border-color: var(--bs-primary);
+        outline: 0;
+    }
+    .dataTables_info, .dataTables_paginate {
+        padding: 0.75rem 1rem !important;
+        color: var(--bs-body-color) !important;
+    }
+    [data-bs-theme="dark"] thead.table-light,
+    [data-bs-theme="dark"] .table-light {
+        --bs-table-bg: var(--bs-tertiary-bg);
+        --bs-table-color: var(--bs-body-color);
+        --bs-table-border-color: var(--bs-border-color);
+    }
+
+    /* FullCalendar Dark Theme Adjustments */
+    [data-bs-theme="dark"] .fc {
+        --fc-border-color: var(--bs-border-color);
+        --fc-page-bg-color: var(--bs-body-bg);
+        --fc-neutral-bg-color: var(--bs-tertiary-bg);
+        --fc-list-event-hover-bg-color: var(--bs-tertiary-bg);
+        color: var(--bs-body-color);
+    }
+    [data-bs-theme="dark"] .fc .fc-col-header-cell-cushion,
+    [data-bs-theme="dark"] .fc .fc-daygrid-day-number {
+        color: var(--bs-body-color);
+    }
+    [data-bs-theme="dark"] .fc-theme-standard th,
+    [data-bs-theme="dark"] .fc-theme-standard td {
+        border-color: var(--bs-border-color);
+    }
+</style>
+
 <div class="container-fluid py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h2 class="fw-bold mb-0">Scheduled Maintenance</h2>
-            <p class="text-muted">Schedule infrastructure upgrades, manage calendar events, and archive past works.</p>
+            <p class="text-body-secondary mb-0">Schedule infrastructure upgrades, manage calendar events, and archive past works.</p>
         </div>
         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newMaintenanceModal">
             <i class="bi bi-plus-lg me-1"></i> Schedule Maintenance
@@ -34,9 +85,9 @@ $timezonesList  = $timezonesList ?? \App\Services\DateService::getTimezonesList(
 
     <!-- FullCalendar Interactive View -->
     <div class="card shadow-sm border-0 mb-5">
-        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <div class="card-header bg-body py-3 d-flex justify-content-between align-items-center border-bottom">
             <h5 class="fw-bold mb-0"><i class="bi bi-calendar-week text-primary me-2"></i>Interactive Calendar</h5>
-            <small class="text-muted">Click any event on the calendar to edit or complete it.</small>
+            <small class="text-body-secondary">Click any event on the calendar to edit or complete it.</small>
         </div>
         <div class="card-body p-4">
             <div id="calendar"></div>
@@ -45,7 +96,7 @@ $timezonesList  = $timezonesList ?? \App\Services\DateService::getTimezonesList(
 
     <!-- 1. UPCOMING & IN-PROGRESS MAINTENANCES -->
     <div class="card shadow-sm border-0 mb-5">
-        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <div class="card-header bg-body py-3 d-flex justify-content-between align-items-center border-bottom">
             <h5 class="fw-bold mb-0 text-primary">
                 <i class="bi bi-clock-history me-2"></i>Active & Upcoming Maintenances
             </h5>
@@ -55,10 +106,10 @@ $timezonesList  = $timezonesList ?? \App\Services\DateService::getTimezonesList(
         </div>
         <div class="card-body p-0">
             <?php if (empty($upcoming)): ?>
-                <div class="text-center py-4 text-muted small">No upcoming maintenances scheduled.</div>
+                <div class="text-center py-4 text-body-secondary small">No upcoming maintenances scheduled.</div>
             <?php else: ?>
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle mb-0">
+                <div class="table-responsive p-3">
+                    <table id="upcomingMaintenanceTable" class="table table-hover align-middle mb-0 w-100">
                         <thead class="table-light">
                             <tr>
                                 <th>Status</th>
@@ -77,14 +128,14 @@ $timezonesList  = $timezonesList ?? \App\Services\DateService::getTimezonesList(
                                         </span>
                                     </td>
                                     <td>
-                                        <strong class="text-dark d-block"><?= htmlspecialchars($m['title']) ?></strong>
-                                        <small class="text-muted"><?= htmlspecialchars(mb_strimwidth($m['description'] ?? '', 0, 80, '...')) ?></small>
+                                        <strong class="text-body d-block"><?= htmlspecialchars($m['title']) ?></strong>
+                                        <small class="text-body-secondary"><?= htmlspecialchars(mb_strimwidth($m['description'] ?? '', 0, 80, '...')) ?></small>
                                     </td>
                                     <td>
-                                        <small class="text-muted"><?= format_date($m['start_time'], 'M d, Y H:i') ?></small>
+                                        <small class="text-body-secondary"><?= format_date($m['start_time'], 'M d, Y H:i') ?></small>
                                     </td>
                                     <td>
-                                        <small class="text-muted"><?= format_date($m['end_time'], 'M d, Y H:i') ?></small>
+                                        <small class="text-body-secondary"><?= format_date($m['end_time'], 'M d, Y H:i') ?></small>
                                     </td>
                                     <td class="text-end">
                                         <!-- Quick Mark as Completed Button -->
@@ -127,20 +178,20 @@ $timezonesList  = $timezonesList ?? \App\Services\DateService::getTimezonesList(
 
     <!-- 2. PAST & COMPLETED MAINTENANCES (ARCHIVE) -->
     <div class="card shadow-sm border-0">
-        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <div class="card-header bg-body py-3 d-flex justify-content-between align-items-center border-bottom">
             <h5 class="fw-bold mb-0 text-secondary">
                 <i class="bi bi-archive me-2"></i>Past & Completed Maintenances
             </h5>
-            <span class="badge bg-light text-secondary border">
+            <span class="badge bg-body-secondary text-body-secondary border">
                 <?= count($past) ?> Archived
             </span>
         </div>
         <div class="card-body p-0">
             <?php if (empty($past)): ?>
-                <div class="text-center py-4 text-muted small">No past maintenances recorded.</div>
+                <div class="text-center py-4 text-body-secondary small">No past maintenances recorded.</div>
             <?php else: ?>
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle mb-0">
+                <div class="table-responsive p-3">
+                    <table id="pastMaintenanceTable" class="table table-hover align-middle mb-0 w-100">
                         <thead class="table-light">
                             <tr>
                                 <th>Title</th>
@@ -153,10 +204,10 @@ $timezonesList  = $timezonesList ?? \App\Services\DateService::getTimezonesList(
                             <?php foreach ($past as $p): ?>
                                 <tr>
                                     <td>
-                                        <span class="fw-semibold text-dark"><?= htmlspecialchars($p['title']) ?></span>
+                                        <span class="fw-semibold text-body"><?= htmlspecialchars($p['title']) ?></span>
                                     </td>
                                     <td>
-                                        <small class="text-muted">
+                                        <small class="text-body-secondary">
                                             <?= format_date($p['start_time'], 'M d, H:i') ?> &mdash; <?= format_date($p['end_time'], 'M d, H:i') ?>
                                         </small>
                                     </td>
@@ -214,7 +265,7 @@ $timezonesList  = $timezonesList ?? \App\Services\DateService::getTimezonesList(
                             <option value="<?= $m['id'] ?>"><?= htmlspecialchars($m['name']) ?></option>
                         <?php endforeach; ?>
                     </select>
-                    <small class="text-muted">Associates this maintenance window to the selected service bar.</small>
+                    <small class="text-body-secondary">Associates this maintenance window to the selected service bar.</small>
                 </div>
                 <div class="row g-2 mb-3">
                     <div class="col-md-6">
@@ -278,7 +329,7 @@ $timezonesList  = $timezonesList ?? \App\Services\DateService::getTimezonesList(
                             <option value="<?= $m['id'] ?>"><?= htmlspecialchars($m['name']) ?></option>
                         <?php endforeach; ?>
                     </select>
-                    <small class="text-muted">Associates this maintenance window to the selected service bar.</small>
+                    <small class="text-body-secondary">Associates this maintenance window to the selected service bar.</small>
                 </div>
                 <div class="row g-2 mb-3">
                     <div class="col-md-6">
@@ -319,34 +370,77 @@ $timezonesList  = $timezonesList ?? \App\Services\DateService::getTimezonesList(
 
 <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
+
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // 1. FullCalendar Initialization
     const calendarEl = document.getElementById('calendar');
-    const calendar = new FullCalendar.Calendar(calendarEl, {
-        initialView: 'dayGridMonth',
-        headerToolbar: {
-            left: 'prev,next today',
-            center: 'title',
-            right: 'dayGridMonth,timeGridWeek,timeGridDay'
-        },
-        events: '/admin/maintenance/events',
-        eventClick: function(info) {
-            info.jsEvent.preventDefault();
-            const event = info.event;
-            const props = event.extendedProps;
-            openEditMaintenanceModal(
-                event.id,
-                event.title,
-                props.description || '',
-                props.start_raw,
-                props.end_raw,
-                props.status,
-                props.monitor_id,
-                props.timezone
-            );
-        }
-    });
-    calendar.render();
+    if (calendarEl) {
+        const calendar = new FullCalendar.Calendar(calendarEl, {
+            initialView: 'dayGridMonth',
+            headerToolbar: {
+                left: 'prev,next today',
+                center: 'title',
+                right: 'dayGridMonth,timeGridWeek,timeGridDay'
+            },
+            events: '/admin/maintenance/events',
+            eventClick: function(info) {
+                info.jsEvent.preventDefault();
+                const event = info.event;
+                const props = event.extendedProps;
+                openEditMaintenanceModal(
+                    event.id,
+                    event.title,
+                    props.description || '',
+                    props.start_raw,
+                    props.end_raw,
+                    props.status,
+                    props.monitor_id,
+                    props.timezone
+                );
+            }
+        });
+        calendar.render();
+    }
+
+    // 2. DataTables Initialization for Upcoming Maintenances
+    if ($('#upcomingMaintenanceTable').length > 0) {
+        $('#upcomingMaintenanceTable').DataTable({
+            pageLength: 10,
+            lengthMenu: [[10, 25, 50, -1], [10, 25, 50, "All"]],
+            columnDefs: [{ orderable: false, targets: 4 }],
+            language: {
+                search: "_INPUT_",
+                searchPlaceholder: "Search upcoming maintenances...",
+                lengthMenu: "Show _MENU_ entries",
+                info: "Showing _START_ to _END_ of _TOTAL_ maintenances",
+                infoEmpty: "No maintenances available",
+                zeroRecords: "No matching maintenances found"
+            }
+        });
+    }
+
+    // 3. DataTables Initialization for Past Maintenances
+    if ($('#pastMaintenanceTable').length > 0) {
+        $('#pastMaintenanceTable').DataTable({
+            pageLength: 10,
+            order: [[1, 'desc']],
+            lengthMenu: [[10, 25, 50, -1], [10, 25, 50, "All"]],
+            columnDefs: [{ orderable: false, targets: 3 }],
+            language: {
+                search: "_INPUT_",
+                searchPlaceholder: "Search past maintenances...",
+                lengthMenu: "Show _MENU_ entries",
+                info: "Showing _START_ to _END_ of _TOTAL_ past records",
+                infoEmpty: "No past records available",
+                zeroRecords: "No matching records found"
+            }
+        });
+    }
 });
 
 function openEditMaintenanceModal(id, title, desc, start, end, status, monitorId, timezone) {
