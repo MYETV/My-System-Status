@@ -128,7 +128,7 @@ class ExternalStatusPlugin
             }
         }
 
-        // 2. Robust Fallback: search by ID or Name in account tunnel list (Crucial!)
+        // 2. Robust Fallback: search by ID or Name in account tunnel list
         if (!$tunnelData) {
             $listUrl = "https://api.cloudflare.com/client/v4/accounts/{$accountId}/cfd_tunnel?is_deleted=false";
             $ch = curl_init($listUrl);
@@ -179,11 +179,10 @@ class ExternalStatusPlugin
                 $targetUrl = "https://dash.cloudflare.com/{$accountId}/networks/tunnels/{$tunnelData['id']}";
             }
         } else {
-            // If Cloudflare API was completely unreachable, default to operational to avoid false down
+            // Default to operational if Cloudflare API was completely unreachable to prevent false positives
             $status = 'operational';
         }
 
-        // Always ensure the tunnel monitor exists if credentials are configured
         $this->upsertMonitor("Tunnel: {$customLabel}", $targetUrl, $status, $parentId, $isPrimary, true);
     }
 
@@ -212,6 +211,7 @@ class ExternalStatusPlugin
 
         $parentId = $this->upsertMonitor('Cloudflare Global Network', 'https://www.cloudflarestatus.com', $parentStatus, null, 0);
 
+        // Map component keywords to readable names and slugs
         $coreKeywords = [
             'worker'        => ['name' => 'Workers & Pages Platform', 'slug' => 'workers'],
             'authoritative' => ['name' => 'Authoritative DNS Service', 'slug' => 'authoritative-dns'],
@@ -225,6 +225,23 @@ class ExternalStatusPlugin
             'warp'          => ['name' => 'WARP Client & Network', 'slug' => 'warp']
         ];
 
+        // Retrieve enabled sub-services from settings (defaults to all if not set)
+        $defaultSlugs = 'workers,authoritative-dns,1111-dns,cdn-cache,dashboard-api,zero-trust,turnstile,stream,warp';
+        $enabledRaw = setting('cf_subservices', $defaultSlugs);
+        $enabledSlugs = array_filter(array_map('trim', explode(',', $enabledRaw)));
+
+        // Remove any sub-services from the database that are currently disabled in settings
+        $uniqueSlugs = [];
+        foreach ($coreKeywords as $info) {
+            $uniqueSlugs[$info['slug']] = true;
+        }
+        foreach (array_keys($uniqueSlugs) as $slug) {
+            if (!in_array($slug, $enabledSlugs, true)) {
+                $targetUrl = "https://www.cloudflarestatus.com#{$slug}";
+                $this->db->prepare("DELETE FROM monitors WHERE target = ?")->execute([$targetUrl]);
+            }
+        }
+
         $matchedSlugs = [];
         $components = $data['components'] ?? [];
 
@@ -236,6 +253,12 @@ class ExternalStatusPlugin
 
             foreach ($coreKeywords as $keyword => $info) {
                 if (stripos($name, $keyword) !== false && !in_array($info['slug'], $matchedSlugs, true)) {
+                    // Skip if the user has excluded this sub-service
+                    if (!in_array($info['slug'], $enabledSlugs, true)) {
+                        $matchedSlugs[] = $info['slug'];
+                        break;
+                    }
+
                     $cStatus = match ($comp['status'] ?? '') {
                         'operational' => 'operational',
                         'degraded_performance', 'partial_outage' => 'degraded',
@@ -362,7 +385,7 @@ class ExternalStatusPlugin
             return $monitorId;
         }
 
-        // Insert if forceInsert is active OR if it's the configured Tunnel
+        // Insert if forceInsert is active OR if it is the configured Tunnel
         if ($this->forceInsert || $alwaysCreate) {
             $insert = $this->db->prepare("
                 INSERT INTO monitors (name, type, target, parent_id, sort_order, is_primary, current_status, interval_seconds, last_check, is_active) 
@@ -380,7 +403,6 @@ class ExternalStatusPlugin
 
     private function recordCheckLog(int $monitorId, string $status): void
     {
-        // Map to valid MySQL ENUM values: 'up' for operational, 'down' for degraded/outage
         $shortStatus = ($status === 'operational') ? 'up' : 'down';
         $httpCode    = ($status === 'operational') ? 200 : (($status === 'degraded') ? 400 : 502);
         $errMessage  = ($status === 'operational') ? null : "Service reported {$status} performance";
@@ -392,7 +414,7 @@ class ExternalStatusPlugin
             ");
             $stmt->execute([$monitorId, $shortStatus, $httpCode, $errMessage]);
         } catch (\Throwable $e) {
-            // Silently ignore if check fails
+            // Silently ignore log write errors
         }
     }
 
