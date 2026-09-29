@@ -37,7 +37,13 @@ class SettingController
             SettingService::set($cbKey, isset($_POST[$cbKey]) ? '1' : '0');
         }
 
-        // 2. Standard text / select / url inputs
+        // 2. Enabled locales checkbox list
+        if (isset($_POST['enabled_locales']) && is_array($_POST['enabled_locales'])) {
+            $locales = array_unique(array_merge(['en'], array_map('trim', $_POST['enabled_locales'])));
+            SettingService::set('enabled_locales', implode(',', $locales));
+        }
+
+        // 3. Standard text / select / url inputs
         $textKeys = [
             'app_name', 'app_url', 'app_timezone',
             'terms_url', 'privacy_policy_url',
@@ -65,7 +71,7 @@ class SettingController
             }
         }
 
-        // 3. Immediately poll Cloudflare Tunnel with forceInsert = true so new tunnels are created in database
+        // 4. Immediately poll Cloudflare Tunnel with forceInsert = true so new tunnels are created in database
         try {
             $plugin = new ExternalStatusPlugin();
             $plugin->syncAll(true);
