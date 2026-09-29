@@ -19,11 +19,31 @@ class PluginController
 
     public function index(): void
     {
+        // Available Cloudflare sub-services definition
+        $cfAvailableSubservices = [
+            'workers'           => 'Workers & Pages Platform',
+            'authoritative-dns' => 'Authoritative DNS Service',
+            '1111-dns'          => 'Recursive DNS (1.1.1.1)',
+            'cdn-cache'         => 'Edge CDN & Cache Network',
+            'dashboard-api'     => 'Dashboard & Control Panel API',
+            'zero-trust'        => 'Zero Trust, Access & Gateway',
+            'turnstile'         => 'Turnstile Captcha Engine',
+            'stream'            => 'Cloudflare Stream Video',
+            'warp'              => 'WARP Client & Network'
+        ];
+
+        // Retrieve enabled Cloudflare sub-services from settings (defaults to all)
+        $defaultSlugs = 'workers,authoritative-dns,1111-dns,cdn-cache,dashboard-api,zero-trust,turnstile,stream,warp';
+        $enabledRaw = setting('cf_subservices', $defaultSlugs);
+        $cfEnabledSubservices = array_filter(array_map('trim', explode(',', $enabledRaw)));
+
         View::render('admin/plugins/index', [
-            'discordConfigured' => !empty(setting('discord_webhook_url')),
-            'aiProvider'        => setting('ai_provider', 'gemini'),
-            'aiModel'           => setting('ai_model', 'gemini-1.5-flash'),
-            'translateEndpoint' => setting('libretranslate_endpoint')
+            'discordConfigured'      => !empty(setting('discord_webhook_url')),
+            'aiProvider'             => setting('ai_provider', 'gemini'),
+            'aiModel'                => setting('ai_model', 'gemini-1.5-flash'),
+            'translateEndpoint'      => setting('libretranslate_endpoint'),
+            'cfAvailableSubservices' => $cfAvailableSubservices,
+            'cfEnabledSubservices'   => $cfEnabledSubservices
         ]);
     }
 
@@ -37,7 +57,15 @@ class PluginController
             SettingService::set($feed, isset($_POST[$feed]) ? '1' : '0');
         }
 
-        // Run sync with forceInsert = true to initialize enabled feeds from admin panel
+        // Save selected Cloudflare sub-services
+        $cfSubservices = $_POST['cf_subservices'] ?? [];
+        if (is_array($cfSubservices)) {
+            SettingService::set('cf_subservices', implode(',', $cfSubservices));
+        } else {
+            SettingService::set('cf_subservices', '');
+        }
+
+        // Run sync with forceInsert = true to synchronize and clean up sub-services
         $importer = new ExternalStatusPlugin();
         $importer->syncAll(true);
 
