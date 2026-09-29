@@ -1,24 +1,53 @@
 <!-- path: app/Views/admin/monitors/index.php -->
+<?php
+// Build a flat list containing both root monitors and sub-services for modals and delete forms
+$allMonitors = [];
+foreach ($monitors as $m) {
+    $allMonitors[] = $m;
+    if (!empty($m['children'])) {
+        foreach ($m['children'] as $child) {
+            $allMonitors[] = $child;
+        }
+    }
+}
+?>
+
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
 <style>
-    /* Custom DataTables Styling Enhancements */
-    .dataTables_wrapper .dataTables_filter input {
-        border-radius: 0.375rem;
-        padding: 0.375rem 0.75rem;
-        border: 1px solid #dee2e6;
-    }
+    /* Custom DataTables Styling Enhancements with Dark Mode support */
+    .dataTables_wrapper .dataTables_filter input,
     .dataTables_wrapper .dataTables_length select {
         border-radius: 0.375rem;
-        padding: 0.375rem 2rem 0.375rem 0.75rem;
-        border: 1px solid #dee2e6;
+        padding: 0.375rem 0.75rem;
+        background-color: var(--bs-body-bg);
+        color: var(--bs-body-color);
+        border: 1px solid var(--bs-border-color);
+    }
+    .dataTables_wrapper .dataTables_length select {
+        padding-right: 2rem;
+    }
+    .dataTables_wrapper .dataTables_filter input:focus,
+    .dataTables_wrapper .dataTables_length select:focus {
+        background-color: var(--bs-body-bg);
+        color: var(--bs-body-color);
+        border-color: var(--bs-primary);
+        outline: 0;
     }
     .dataTables_info, .dataTables_paginate {
         padding-top: 1rem !important;
         padding-bottom: 0.5rem !important;
+        color: var(--bs-body-color) !important;
     }
     tr.dt-child-row td {
-        background-color: #f8f9fa !important;
+        background-color: var(--bs-tertiary-bg) !important;
         padding: 0 !important;
+    }
+    /* Dynamic table header style for dark mode compatibility */
+    [data-bs-theme="dark"] thead.table-light,
+    [data-bs-theme="dark"] .table-light {
+        --bs-table-bg: var(--bs-tertiary-bg);
+        --bs-table-color: var(--bs-body-color);
+        --bs-table-border-color: var(--bs-border-color);
     }
 </style>
 
@@ -26,7 +55,7 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h2 class="fw-bold mb-0">Monitors & Services</h2>
-            <p class="text-muted mb-0">Manage core endpoints, secondary cloud feeds, and display order.</p>
+            <p class="text-body-secondary mb-0">Manage core endpoints, secondary cloud feeds, and display order.</p>
         </div>
         <div class="d-flex gap-2">
             <button type="submit" form="orderForm" class="btn btn-outline-secondary">
@@ -108,9 +137,9 @@
                             <td><span class="badge bg-secondary text-uppercase"><?= $m['type'] ?></span></td>
                             <td>
                                 <div class="d-flex align-items-center gap-2">
-                                    <strong class="text-dark"><?= htmlspecialchars($m['name']) ?></strong>
+                                    <strong class="text-body"><?= htmlspecialchars($m['name']) ?></strong>
                                     <?php if ($isExternal): ?>
-                                        <span class="badge bg-light text-dark border small" title="Automated plugin or Zero Trust tunnel feed">
+                                        <span class="badge bg-body-secondary text-body border small" title="Automated plugin or Zero Trust tunnel feed">
                                             <i class="bi bi-plugin me-1 text-primary"></i> Feed / Tunnel
                                         </span>
                                     <?php endif; ?>
@@ -125,14 +154,14 @@
                                 </div>
                             </td>
                             <td style="max-width: 220px;" class="text-truncate">
-                                <code class="small text-muted"><?= htmlspecialchars($m['target']) ?></code>
+                                <code class="small text-body-secondary"><?= htmlspecialchars($m['target']) ?></code>
                             </td>
                             <td><strong><?= number_format((float)($m['uptime_percentage'] ?? 100), 2) ?>%</strong></td>
                             <td>
                                 <?php if ((int)($m['is_primary'] ?? 0) === 1): ?>
                                     <span class="badge bg-primary"><i class="bi bi-star-fill me-1"></i> Core Service</span>
                                 <?php else: ?>
-                                    <span class="badge bg-light text-secondary border">Secondary</span>
+                                    <span class="badge bg-body-secondary text-body-secondary border">Secondary</span>
                                 <?php endif; ?>
                             </td>
                             <td class="text-end">
@@ -160,20 +189,40 @@
     </form>
 </div>
 
+<!-- Child Row Templates for DataTables Drawer -->
 <?php foreach ($monitors as $m): ?>
     <?php if (!empty($m['children'])): ?>
         <template id="child-template-<?= $m['id'] ?>">
-            <div class="p-3 bg-light border-top border-bottom">
+            <div class="p-3 bg-body-tertiary border-top border-bottom">
                 <div class="ps-4 border-start border-3 border-primary">
-                    <h6 class="fw-bold text-muted small mb-2">Sub-services under <?= htmlspecialchars($m['name']) ?>:</h6>
+                    <h6 class="fw-bold text-body-secondary small mb-2">Sub-services under <?= htmlspecialchars($m['name']) ?>:</h6>
                     <div class="row g-2">
                         <?php foreach ($m['children'] as $child): ?>
                             <div class="col-md-6 col-lg-4">
-                                <div class="d-flex justify-content-between align-items-center p-2 bg-white rounded border small">
-                                    <span class="text-truncate fw-semibold"><?= htmlspecialchars($child['name']) ?></span>
-                                    <span class="badge bg-<?= $child['current_status'] === 'operational' ? 'success' : 'warning text-dark' ?> ms-2">
-                                        <?= strtoupper($child['current_status']) ?>
-                                    </span>
+                                <div class="d-flex justify-content-between align-items-center p-2 bg-body rounded border small">
+                                    <div class="d-flex align-items-center text-truncate me-2">
+                                        <span class="text-truncate fw-semibold text-body"><?= htmlspecialchars($child['name']) ?></span>
+                                        <span class="badge bg-secondary text-uppercase ms-2" style="font-size: 10px;"><?= $child['type'] ?></span>
+                                    </div>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="badge bg-<?= $child['current_status'] === 'operational' ? 'success' : 'warning text-dark' ?>">
+                                            <?= strtoupper($child['current_status']) ?>
+                                        </span>
+                                        <div class="btn-group btn-group-sm">
+                                            <?php if ($child['is_external']): ?>
+                                                <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2" disabled title="Feed and Tunnel monitors cannot be edited manually.">
+                                                    <i class="bi bi-pencil"></i>
+                                                </button>
+                                            <?php else: ?>
+                                                <button type="button" class="btn btn-xs btn-outline-primary py-0 px-2" data-bs-toggle="modal" data-bs-target="#editMonitorModal<?= $child['id'] ?>" title="Edit Sub-service">
+                                                    <i class="bi bi-pencil"></i>
+                                                </button>
+                                            <?php endif; ?>
+                                            <button type="submit" form="deleteForm<?= $child['id'] ?>" class="btn btn-xs btn-outline-danger py-0 px-2" title="Delete Sub-service">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         <?php endforeach; ?>
@@ -184,14 +233,15 @@
     <?php endif; ?>
 <?php endforeach; ?>
 
-<!-- Standalone Delete Forms -->
-<?php foreach ($monitors as $m): ?>
-    <form id="deleteForm<?= $m['id'] ?>" action="/admin/monitors/delete" method="POST" onsubmit="return confirm('Delete <?= htmlspecialchars(addslashes($m['name'])) ?> and all of its sub-services?');">
+<!-- Standalone Delete Forms for Root and Child Monitors -->
+<?php foreach ($allMonitors as $m): ?>
+    <form id="deleteForm<?= $m['id'] ?>" action="/admin/monitors/delete" method="POST" onsubmit="return confirm('Delete <?= htmlspecialchars(addslashes($m['name'])) ?>?');">
         <input type="hidden" name="id" value="<?= $m['id'] ?>">
     </form>
 <?php endforeach; ?>
 
-<?php foreach ($monitors as $m): ?>
+<!-- Edit Modals for Root and Child Monitors -->
+<?php foreach ($allMonitors as $m): ?>
     <?php if (empty($m['is_external'])): ?>
         <div class="modal fade" id="editMonitorModal<?= $m['id'] ?>" tabindex="-1">
             <div class="modal-dialog">
@@ -249,7 +299,7 @@
                                 <option value="">None (Standalone / Parent Service)</option>
                                 <?php foreach ($parentsList as $parent): ?>
                                     <?php if ($parent['id'] != $m['id']): ?>
-                                        <option value="<?= $parent['id'] ?>" <?= $m['parent_id'] == $parent['id'] ? 'selected' : '' ?>>
+                                        <option value="<?= $parent['id'] ?>" <?= (isset($m['parent_id']) && $m['parent_id'] == $parent['id']) ? 'selected' : '' ?>>
                                             <?= htmlspecialchars($parent['name']) ?>
                                         </option>
                                     <?php endif; ?>
@@ -259,7 +309,7 @@
 
                         <!-- Primary Core Service Checkbox -->
                         <div class="form-check form-switch mb-2">
-                            <input class="form-check-input" type="checkbox" name="is_primary" value="1" id="primarySwitchEdit<?= $m['id'] ?>" <?= (int)$m['is_primary'] === 1 ? 'checked' : '' ?>>
+                            <input class="form-check-input" type="checkbox" name="is_primary" value="1" id="primarySwitchEdit<?= $m['id'] ?>" <?= (int)($m['is_primary'] ?? 0) === 1 ? 'checked' : '' ?>>
                             <label class="form-check-label fw-semibold" for="primarySwitchEdit<?= $m['id'] ?>">
                                 Mark as Core / Primary Service
                             </label>
@@ -275,6 +325,7 @@
     <?php endif; ?>
 <?php endforeach; ?>
 
+<!-- Create New Monitor Modal -->
 <div class="modal fade" id="newMonitorModal" tabindex="-1">
     <div class="modal-dialog">
         <form action="/admin/monitors/store" method="POST" class="modal-content">
@@ -331,7 +382,7 @@
                             <option value="<?= $parent['id'] ?>"><?= htmlspecialchars($parent['name']) ?></option>
                         <?php endforeach; ?>
                     </select>
-                    <small class="text-muted">Group this monitor under an existing service.</small>
+                    <small class="text-body-secondary">Group this monitor under an existing service.</small>
                 </div>
 
                 <!-- Primary Core Service Checkbox -->
@@ -340,7 +391,7 @@
                     <label class="form-check-label fw-semibold" for="primarySwitch">
                         Mark as Core / Primary Service
                     </label>
-                    <div class="text-muted small">If a Core Service goes down, the global status banner turns into Major Outage.</div>
+                    <div class="text-body-secondary small">If a Core Service goes down, the global status banner turns into Major Outage.</div>
                 </div>
             </div>
             <div class="modal-footer">
