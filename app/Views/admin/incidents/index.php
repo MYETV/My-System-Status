@@ -1,3 +1,4 @@
+<!-- path: app/Views/admin/incidents/index.php -->
 <?php
 // Fallbacks to avoid unhandled variable notices
 $activeIncidents   = $activeIncidents ?? [];
@@ -5,11 +6,45 @@ $resolvedIncidents = $resolvedIncidents ?? [];
 $activeTimezone    = $activeTimezone ?? \App\Services\DateService::getActiveTimezone();
 $timezonesList     = $timezonesList ?? \App\Services\DateService::getTimezonesList();
 ?>
+
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
+<style>
+    /* DataTables Enhancements for Bootstrap 5 Dark Mode */
+    .dataTables_wrapper .dataTables_filter input,
+    .dataTables_wrapper .dataTables_length select {
+        border-radius: 0.375rem;
+        padding: 0.375rem 0.75rem;
+        background-color: var(--bs-body-bg);
+        color: var(--bs-body-color);
+        border: 1px solid var(--bs-border-color);
+    }
+    .dataTables_wrapper .dataTables_length select {
+        padding-right: 2rem;
+    }
+    .dataTables_wrapper .dataTables_filter input:focus,
+    .dataTables_wrapper .dataTables_length select:focus {
+        background-color: var(--bs-body-bg);
+        color: var(--bs-body-color);
+        border-color: var(--bs-primary);
+        outline: 0;
+    }
+    .dataTables_info, .dataTables_paginate {
+        padding: 0.75rem 1rem !important;
+        color: var(--bs-body-color) !important;
+    }
+    [data-bs-theme="dark"] thead.table-light,
+    [data-bs-theme="dark"] .table-light {
+        --bs-table-bg: var(--bs-tertiary-bg);
+        --bs-table-color: var(--bs-body-color);
+        --bs-table-border-color: var(--bs-border-color);
+    }
+</style>
+
 <div class="container-fluid py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h2 class="fw-bold mb-0">Incidents & Outages</h2>
-            <p class="text-muted">Communicate downtimes, manage progress timelines, and resolve issues.</p>
+            <p class="text-body-secondary mb-0">Communicate downtimes, manage progress timelines, and resolve issues.</p>
         </div>
         <button class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#newIncidentModal">
             <i class="bi bi-exclamation-octagon me-1"></i> Declare Incident
@@ -41,7 +76,7 @@ $timezonesList     = $timezonesList ?? \App\Services\DateService::getTimezonesLi
 
     <!-- 1. ACTIVE & ONGOING INCIDENTS SECTION -->
     <div class="card shadow-sm border-0 mb-5">
-        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <div class="card-header bg-body py-3 d-flex justify-content-between align-items-center border-bottom">
             <h5 class="fw-bold mb-0 text-danger">
                 <i class="bi bi-exclamation-triangle-fill me-2"></i>Active & Ongoing Incidents
             </h5>
@@ -51,14 +86,14 @@ $timezonesList     = $timezonesList ?? \App\Services\DateService::getTimezonesLi
         </div>
         <div class="card-body p-0">
             <?php if (empty($activeIncidents)): ?>
-                <div class="text-center py-5 text-muted">
+                <div class="text-center py-5 text-body-secondary">
                     <i class="bi bi-shield-fill-check text-success fs-1 d-block mb-2"></i>
-                    <h5 class="fw-bold text-dark">All Systems Operational</h5>
+                    <h5 class="fw-bold text-body">All Systems Operational</h5>
                     <p class="small mb-0">There are currently no active or unresolved incidents reported.</p>
                 </div>
             <?php else: ?>
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle mb-0">
+                <div class="table-responsive p-3">
+                    <table id="activeIncidentsTable" class="table table-hover align-middle mb-0 w-100">
                         <thead class="table-light">
                             <tr>
                                 <th>Impact</th>
@@ -77,20 +112,20 @@ $timezonesList     = $timezonesList ?? \App\Services\DateService::getTimezonesLi
                                         </span>
                                     </td>
                                     <td>
-                                        <strong class="text-dark d-block"><?= htmlspecialchars($inc['title']) ?></strong>
+                                        <strong class="text-body d-block"><?= htmlspecialchars($inc['title']) ?></strong>
                                         <?php if (!empty($inc['ai_summary'])): ?>
-                                            <small class="text-muted"><i class="bi bi-robot text-primary me-1"></i><?= htmlspecialchars(mb_strimwidth($inc['ai_summary'], 0, 75, '...')) ?></small>
+                                            <small class="text-body-secondary"><i class="bi bi-robot text-primary me-1"></i><?= htmlspecialchars(mb_strimwidth($inc['ai_summary'], 0, 75, '...')) ?></small>
                                         <?php endif; ?>
                                     </td>
                                     <td>
-                                        <span class="badge bg-light text-dark border text-uppercase px-2 py-1">
+                                        <span class="badge bg-body-secondary text-body border text-uppercase px-2 py-1">
                                             <?= $inc['status'] ?>
                                         </span>
                                     </td>
                                     <td>
-                                        <small class="text-muted">
+                                        <small class="text-body-secondary">
                                             <?= format_date($inc['start_time'] ?? $inc['created_at'], 'M d, H:i') ?>
-                                            <span class="badge bg-light text-muted border ms-1"><?= htmlspecialchars($inc['timezone'] ?? 'UTC') ?></span>
+                                            <span class="badge bg-body-secondary text-body-secondary border ms-1"><?= htmlspecialchars($inc['timezone'] ?? 'UTC') ?></span>
                                         </small>
                                     </td>
                                     <td class="text-end">
@@ -124,20 +159,20 @@ $timezonesList     = $timezonesList ?? \App\Services\DateService::getTimezonesLi
 
     <!-- 2. PAST & RESOLVED INCIDENTS SECTION -->
     <div class="card shadow-sm border-0">
-        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <div class="card-header bg-body py-3 d-flex justify-content-between align-items-center border-bottom">
             <h5 class="fw-bold mb-0 text-secondary">
                 <i class="bi bi-archive me-2"></i>Past & Resolved Incidents
             </h5>
-            <span class="badge bg-light text-secondary border">
+            <span class="badge bg-body-secondary text-body-secondary border">
                 <?= count($resolvedIncidents) ?> Archived
             </span>
         </div>
         <div class="card-body p-0">
             <?php if (empty($resolvedIncidents)): ?>
-                <div class="text-center py-4 text-muted small">No resolved incidents in history.</div>
+                <div class="text-center py-4 text-body-secondary small">No resolved incidents in history.</div>
             <?php else: ?>
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle mb-0">
+                <div class="table-responsive p-3">
+                    <table id="resolvedIncidentsTable" class="table table-hover align-middle mb-0 w-100">
                         <thead class="table-light">
                             <tr>
                                 <th>Incident Title</th>
@@ -152,16 +187,16 @@ $timezonesList     = $timezonesList ?? \App\Services\DateService::getTimezonesLi
                                     <td>
                                         <div class="d-flex align-items-center gap-2">
                                             <i class="bi bi-check-circle-fill text-success"></i>
-                                            <span class="fw-semibold text-dark"><?= htmlspecialchars($inc['title']) ?></span>
+                                            <span class="fw-semibold text-body"><?= htmlspecialchars($inc['title']) ?></span>
                                         </div>
                                     </td>
                                     <td>
-                                        <span class="badge bg-light text-secondary border text-uppercase">
+                                        <span class="badge bg-body-secondary text-body-secondary border text-uppercase">
                                             <?= $inc['impact'] ?>
                                         </span>
                                     </td>
                                     <td>
-                                        <small class="text-muted">
+                                        <small class="text-body-secondary">
                                             <?= format_date($inc['start_time'] ?? $inc['created_at'], 'M d, H:i') ?>
                                             &mdash;
                                             <?= format_date($inc['end_time'] ?? $inc['updated_at'], 'M d, Y H:i') ?>
@@ -215,7 +250,7 @@ $timezonesList     = $timezonesList ?? \App\Services\DateService::getTimezonesLi
                         <option value="monitoring">Monitoring (Fix implemented, monitoring metrics)</option>
                         <option value="resolved" class="fw-bold text-success">Resolved (Closed & archived to past incidents)</option>
                     </select>
-                    <small class="text-muted">Setting status to <strong>Resolved</strong> will archive it under past incidents.</small>
+                    <small class="text-body-secondary">Setting status to <strong>Resolved</strong> will archive it under past incidents.</small>
                 </div>
                 <div class="mb-3">
                     <label class="form-label fw-semibold">Timeline Note / Message</label>
@@ -336,7 +371,7 @@ $timezonesList     = $timezonesList ?? \App\Services\DateService::getTimezonesLi
                             <option value="<?= $m['id'] ?>"><?= htmlspecialchars($m['name']) ?></option>
                         <?php endforeach; ?>
                     </select>
-                    <small class="text-muted">If selected, this incident will color the 90-day bar of that specific service.</small>
+                    <small class="text-body-secondary">If selected, this incident will color the 90-day bar of that specific service.</small>
                 </div>
 
                 <div class="row g-2 mb-3">
@@ -386,7 +421,48 @@ $timezonesList     = $timezonesList ?? \App\Services\DateService::getTimezonesLi
     </div>
 </div>
 
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+
 <script>
+$(document).ready(function() {
+    // Initialize DataTables for Active Incidents
+    if ($('#activeIncidentsTable').length > 0) {
+        $('#activeIncidentsTable').DataTable({
+            pageLength: 10,
+            lengthMenu: [[10, 25, 50, -1], [10, 25, 50, "All"]],
+            columnDefs: [{ orderable: false, targets: 4 }],
+            language: {
+                search: "_INPUT_",
+                searchPlaceholder: "Search active incidents...",
+                lengthMenu: "Show _MENU_ entries",
+                info: "Showing _START_ to _END_ of _TOTAL_ incidents",
+                infoEmpty: "No incidents available",
+                zeroRecords: "No matching incidents found"
+            }
+        });
+    }
+
+    // Initialize DataTables for Resolved Incidents
+    if ($('#resolvedIncidentsTable').length > 0) {
+        $('#resolvedIncidentsTable').DataTable({
+            pageLength: 10,
+            order: [[2, 'desc']],
+            lengthMenu: [[10, 25, 50, -1], [10, 25, 50, "All"]],
+            columnDefs: [{ orderable: false, targets: 3 }],
+            language: {
+                search: "_INPUT_",
+                searchPlaceholder: "Search resolved incidents...",
+                lengthMenu: "Show _MENU_ entries",
+                info: "Showing _START_ to _END_ of _TOTAL_ archived incidents",
+                infoEmpty: "No archived incidents available",
+                zeroRecords: "No matching archived incidents found"
+            }
+        });
+    }
+});
+
 function openUpdateModal(id, title, currentStatus) {
     document.getElementById('updateModalIncidentId').value = id;
     document.getElementById('updateModalTitle').textContent = 'Update: ' + title;
