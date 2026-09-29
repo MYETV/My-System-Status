@@ -3,7 +3,7 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h2 class="fw-bold mb-0">Plugins & Integrations</h2>
-            <p class="text-muted">Connect external status feeds, notification channels, and AI engines.</p>
+            <p class="text-body-secondary mb-0">Connect external status feeds, notification channels, and AI engines.</p>
         </div>
         <form action="/admin/plugins/sync-feeds" method="POST">
             <button type="submit" class="btn btn-primary">
@@ -46,7 +46,7 @@
     <?php endif; ?>
 
     <div class="row g-4">
-        <!-- 1. External Status Feeds Importer with Selection Checkboxes -->
+        <!-- 1. External Status Feeds Importer with Sub-services Selection -->
         <div class="col-md-6 col-xl-6">
             <form action="/admin/plugins/save-feeds-config" method="POST" class="card h-100 border-0 shadow-sm">
                 <div class="card-body">
@@ -61,18 +61,49 @@
                             </div>
                         </div>
                     </div>
-                    <p class="text-muted small mb-3">
-                        Choose which public cloud status feeds to monitor and include in your status dashboard:
+                    <p class="text-body-secondary small mb-3">
+                        Choose which public cloud status feeds and specific sub-services to monitor:
                     </p>
 
                     <!-- Provider Selection Checkboxes -->
-                    <div class="bg-light p-3 rounded-3 border mb-3">
-                        <!-- Cloudflare -->
+                    <div class="bg-body-tertiary p-3 rounded-3 border mb-3">
+                        <!-- Cloudflare Parent -->
                         <div class="form-check mb-2">
-                            <input class="form-check-input" type="checkbox" name="feed_cloudflare_enabled" value="1" id="feedCf" <?= setting('feed_cloudflare_enabled', '1') === '1' ? 'checked' : '' ?>>
+                            <input class="form-check-input" type="checkbox" name="feed_cloudflare_enabled" value="1" id="feedCf" <?= setting('feed_cloudflare_enabled', '1') === '1' ? 'checked' : '' ?> onchange="toggleCfSubservices(this.checked)">
                             <label class="form-check-label fw-semibold" for="feedCf">
-                                Cloudflare (Dynamic sub-services: Workers, Pages, DNS, CDN, etc.)
+                                Cloudflare Global Network
                             </label>
+                        </div>
+
+                        <!-- Cloudflare Sub-services Granular Selection -->
+                        <div class="ms-4 mb-3 p-3 bg-body rounded-3 border <?= setting('feed_cloudflare_enabled', '1') === '1' ? '' : 'd-none' ?>" id="cfSubservicesContainer">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="small fw-bold text-body-secondary">Cloudflare Sub-services:</span>
+                                <div class="btn-group btn-group-sm">
+                                    <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none me-2" onclick="setAllCfSubservices(true)">Select all</button>
+                                    <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none text-danger" onclick="setAllCfSubservices(false)">Deselect all</button>
+                                </div>
+                            </div>
+                            <div class="row g-2">
+                                <?php foreach ($cfAvailableSubservices as $slug => $label): ?>
+                                    <div class="col-12 col-sm-6">
+                                        <div class="form-check small">
+                                            <input class="form-check-input cf-sub-checkbox" 
+                                                   type="checkbox" 
+                                                   name="cf_subservices[]" 
+                                                   value="<?= htmlspecialchars($slug) ?>" 
+                                                   id="cf_sub_<?= htmlspecialchars($slug) ?>"
+                                                   <?= in_array($slug, $cfEnabledSubservices ?? [], true) ? 'checked' : '' ?>>
+                                            <label class="form-check-label" for="cf_sub_<?= htmlspecialchars($slug) ?>">
+                                                <?= htmlspecialchars($label) ?>
+                                            </label>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                            <small class="text-body-secondary d-block mt-2" style="font-size: 11px;">
+                                <i class="bi bi-info-circle me-1"></i> Deselecting a sub-service (e.g. WARP) immediately deletes it from the monitors list.
+                            </small>
                         </div>
 
                         <!-- Amazon AWS -->
@@ -116,7 +147,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="card-footer bg-white border-0 pt-0 pb-3 d-flex gap-2">
+                <div class="card-footer bg-transparent border-0 pt-0 pb-3 d-flex gap-2">
                     <button type="submit" class="btn btn-sm btn-primary">
                         <i class="bi bi-save me-1"></i> Save & Poll Enabled Feeds
                     </button>
@@ -130,7 +161,7 @@
                 <div class="card-body">
                     <div class="d-flex align-items-center justify-content-between mb-3">
                         <div class="d-flex align-items-center gap-2">
-                            <span class="p-2 bg-indigo bg-opacity-10 text-primary rounded-3 fs-4">
+                            <span class="p-2 bg-primary bg-opacity-10 text-primary rounded-3 fs-4">
                                 <i class="bi bi-discord"></i>
                             </span>
                             <div>
@@ -141,11 +172,11 @@
                             </div>
                         </div>
                     </div>
-                    <p class="text-muted small">
+                    <p class="text-body-secondary small">
                         Dispatches rich message embeds directly into your designated Discord channel whenever an endpoint goes down or an incident is declared.
                     </p>
                 </div>
-                <div class="card-footer bg-white border-0 pt-0 pb-3">
+                <div class="card-footer bg-transparent border-0 pt-0 pb-3">
                     <a href="/admin/settings#integrationsTab" class="btn btn-sm btn-outline-secondary">
                         <i class="bi bi-gear me-1"></i> Configure Webhook
                     </a>
@@ -168,11 +199,11 @@
                             </div>
                         </div>
                     </div>
-                    <p class="text-muted small">
+                    <p class="text-body-secondary small">
                         Drafts clear, user-friendly incident post-mortems and status updates by analyzing raw infrastructure stack traces and probe error logs using <strong><?= htmlspecialchars($aiModel) ?></strong>.
                     </p>
                 </div>
-                <div class="card-footer bg-white border-0 pt-0 pb-3">
+                <div class="card-footer bg-transparent border-0 pt-0 pb-3">
                     <a href="/admin/settings#aiTab" class="btn btn-sm btn-outline-secondary">
                         <i class="bi bi-gear me-1"></i> Configure AI Model
                     </a>
@@ -186,7 +217,7 @@
                 <div class="card-body">
                     <div class="d-flex align-items-center justify-content-between mb-3">
                         <div class="d-flex align-items-center gap-2">
-                            <span class="p-2 bg-warning bg-opacity-10 text-dark rounded-3 fs-4">
+                            <span class="p-2 bg-warning bg-opacity-10 text-warning rounded-3 fs-4">
                                 <i class="bi bi-translate"></i>
                             </span>
                             <div>
@@ -197,11 +228,11 @@
                             </div>
                         </div>
                     </div>
-                    <p class="text-muted small">
+                    <p class="text-body-secondary small">
                         Automatically synchronizes and translates master keys from <code>en.json</code> into other target languages using your connected LibreTranslate instance (<code><?= htmlspecialchars($translateEndpoint ?: 'Not configured') ?></code>).
                     </p>
                 </div>
-                <div class="card-footer bg-white border-0 pt-0 pb-3 d-flex gap-2">
+                <div class="card-footer bg-transparent border-0 pt-0 pb-3 d-flex gap-2">
                     <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#translateModal">
                         <i class="bi bi-translate me-1"></i> Auto-Translate JSONs
                     </button>
@@ -237,7 +268,7 @@
                         <option value="de">German (de.json)</option>
                         <option value="pt">Portuguese (pt.json)</option>
                     </select>
-                    <small class="text-muted">If the language file does not exist, it will be automatically created.</small>
+                    <small class="text-body-secondary">If the language file does not exist, it will be automatically created.</small>
                 </div>
             </div>
             <div class="modal-footer">
@@ -249,3 +280,22 @@
         </form>
     </div>
 </div>
+
+<script>
+function toggleCfSubservices(enabled) {
+    const container = document.getElementById('cfSubservicesContainer');
+    if (container) {
+        if (enabled) {
+            container.classList.remove('d-none');
+        } else {
+            container.classList.add('d-none');
+        }
+    }
+}
+
+function setAllCfSubservices(checked) {
+    document.querySelectorAll('.cf-sub-checkbox').forEach(cb => {
+        cb.checked = checked;
+    });
+}
+</script>
