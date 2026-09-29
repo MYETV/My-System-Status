@@ -12,7 +12,7 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h2 class="fw-bold mb-0">Platform Settings</h2>
-            <p class="text-muted">Manage system configuration, mail servers, legal links, security, and external services.</p>
+            <p class="text-body-secondary mb-0">Manage system configuration, mail servers, legal links, security, and external services.</p>
         </div>
     </div>
 
@@ -32,7 +32,7 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
 
     <form action="/admin/settings/update" method="POST" class="card shadow-sm border-0">
         <!-- Navigation Tabs -->
-        <div class="card-header bg-white border-bottom p-0">
+        <div class="card-header bg-body border-bottom p-0">
             <ul class="nav nav-tabs card-header-tabs m-0 px-3" role="tablist">
                 <li class="nav-item">
                     <a class="nav-link active" data-bs-toggle="tab" href="#generalTab" role="tab">
@@ -78,19 +78,19 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
                     <div class="col-md-6">
                         <label class="form-label fw-semibold">Application Public URL</label>
                         <input type="url" name="app_url" value="<?= htmlspecialchars(setting('app_url', app_url())) ?>" class="form-control" placeholder="https://status.example.com" required>
-                        <small class="text-muted">Used for subscriber email verification links and OAuth callbacks.</small>
+                        <small class="text-body-secondary">Used for subscriber email verification links and OAuth callbacks.</small>
                     </div>
 
                     <!-- Footer Legal Links -->
                     <div class="col-md-6">
                         <label class="form-label fw-semibold">Terms of Service URL</label>
                         <input type="url" name="terms_url" value="<?= htmlspecialchars(setting('terms_url', '')) ?>" class="form-control" placeholder="https://example.com/terms">
-                        <small class="text-muted">Displayed in the public page footer (leave empty to hide).</small>
+                        <small class="text-body-secondary">Displayed in the public page footer (leave empty to hide).</small>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-semibold">Privacy Policy URL</label>
                         <input type="url" name="privacy_policy_url" value="<?= htmlspecialchars(setting('privacy_policy_url', '')) ?>" class="form-control" placeholder="https://example.com/privacy">
-                        <small class="text-muted">Displayed in the public page footer (leave empty to hide).</small>
+                        <small class="text-body-secondary">Displayed in the public page footer (leave empty to hide).</small>
                     </div>
 
                     <div class="col-md-6">
@@ -102,13 +102,13 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
                                 </option>
                             <?php endforeach; ?>
                         </select>
-                        <small class="text-muted">Fallback timezone when browser auto-detection is not active.</small>
+                        <small class="text-body-secondary">Fallback timezone when browser auto-detection is not active.</small>
                     </div>
 
                     <!-- Supported Languages in Header Selection -->
                     <div class="col-md-6">
                         <label class="form-label fw-semibold">Enabled Header Languages</label>
-                        <div class="p-3 bg-light rounded-3 border" style="max-height: 220px; overflow-y: auto;">
+                        <div class="p-3 bg-body-tertiary rounded-3 border" style="max-height: 220px; overflow-y: auto;">
                             <div class="row g-2">
                                 <?php foreach ($allLanguages as $code => $info): ?>
                                     <div class="col-6 col-md-4">
@@ -127,20 +127,20 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
                                 <?php endforeach; ?>
                             </div>
                         </div>
-                        <small class="text-muted d-block mt-1">Select which languages will appear in the navigation header switchers.</small>
+                        <small class="text-body-secondary d-block mt-1">Select which languages will appear in the navigation header switchers.</small>
                     </div>
 
                     <!-- LibreTranslate Configuration & Auto-Sync Section -->
                     <div class="col-12 mt-4">
-                        <div class="p-4 bg-light rounded-3 border">
+                        <div class="p-4 bg-body-tertiary rounded-3 border">
                             <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
                                 <div class="d-flex align-items-center gap-2">
-                                    <span class="p-2 bg-warning bg-opacity-10 text-dark rounded-3 fs-4">
+                                    <span class="p-2 bg-warning bg-opacity-10 text-warning rounded-3 fs-4">
                                         <i class="bi bi-translate"></i>
                                     </span>
                                     <div>
                                         <h5 class="fw-bold mb-0">LibreTranslate Language Files Generator</h5>
-                                        <p class="text-muted small mb-0">Auto-translate missing keys from <code>languages/en.json</code> into other language JSON files.</p>
+                                        <p class="text-body-secondary small mb-0">Auto-translate missing keys from <code>languages/en.json</code> into other language JSON files.</p>
                                     </div>
                                 </div>
                                 <button type="button" class="btn btn-sm btn-primary fw-semibold" data-bs-toggle="modal" data-bs-target="#syncJsonModal">
@@ -165,11 +165,11 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
 
             <!-- 2. SECURITY TAB (Turnstile & Rate Limiter) -->
             <div class="tab-pane fade" id="securityTab" role="tabpanel">
-                <div class="p-4 bg-light rounded-3 border mb-4">
+                <div class="p-4 bg-body-tertiary rounded-3 border mb-4">
                     <div class="d-flex align-items-center justify-content-between mb-3">
                         <div>
                             <h5 class="fw-bold mb-1"><i class="bi bi-shield-check text-primary me-2"></i>Cloudflare Turnstile Bot Protection</h5>
-                            <p class="text-muted small mb-0">Protect the admin login form against automated brute-force attacks.</p>
+                            <p class="text-body-secondary small mb-0">Protect the admin login form against automated brute-force attacks.</p>
                         </div>
                         <div class="form-check form-switch fs-5">
                             <input class="form-check-input" type="checkbox" name="turnstile_enabled" value="1" id="turnstileSwitch" <?= setting('turnstile_enabled') === '1' ? 'checked' : '' ?>>
@@ -188,11 +188,11 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
                     </div>
                 </div>
 
-                <div class="p-4 bg-light rounded-3 border">
+                <div class="p-4 bg-body-tertiary rounded-3 border">
                     <div class="d-flex align-items-center justify-content-between mb-3">
                         <div>
                             <h5 class="fw-bold mb-1"><i class="bi bi-speedometer2 text-danger me-2"></i>Anti-Brute Force Rate Limiter</h5>
-                            <p class="text-muted small mb-0">Automatically throttle repeated failed login attempts from suspicious IP addresses.</p>
+                            <p class="text-body-secondary small mb-0">Automatically throttle repeated failed login attempts from suspicious IP addresses.</p>
                         </div>
                         <div class="form-check form-switch fs-5">
                             <input class="form-check-input" type="checkbox" name="rate_limit_enabled" value="1" id="rateLimitSwitch" <?= setting('rate_limit_enabled', '1') === '1' ? 'checked' : '' ?>>
@@ -203,12 +203,12 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">Max Login Attempts Allowed</label>
                             <input type="number" name="rate_limit_max_attempts" value="<?= htmlspecialchars(setting('rate_limit_max_attempts', '5')) ?>" class="form-control" min="1" max="50">
-                            <small class="text-muted">Threshold before temporary IP lockout is triggered.</small>
+                            <small class="text-body-secondary">Threshold before temporary IP lockout is triggered.</small>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">Lockout Duration (Minutes)</label>
                             <input type="number" name="rate_limit_lockout_minutes" value="<?= htmlspecialchars(setting('rate_limit_lockout_minutes', '15')) ?>" class="form-control" min="1" max="1440">
-                            <small class="text-muted">Minutes the attacker IP must wait before retrying.</small>
+                            <small class="text-body-secondary">Minutes the attacker IP must wait before retrying.</small>
                         </div>
                     </div>
                 </div>
@@ -250,9 +250,9 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
 
             <!-- 4. OAUTH SSO TAB -->
             <div class="tab-pane fade" id="oauthTab" role="tabpanel">
-                <div class="p-3 bg-light rounded-3 mb-4 border">
+                <div class="p-3 bg-body-tertiary rounded-3 mb-4 border">
                     <h5 class="fw-bold text-primary mb-2"><i class="bi bi-tv me-2"></i>MYETV SSO Provider</h5>
-                    <p class="small text-muted mb-3">API integration from <code>https://developers.myetv.tv</code></p>
+                    <p class="small text-body-secondary mb-3">API integration from <code>https://developers.myetv.tv</code></p>
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label class="form-label">MYETV Client ID</label>
@@ -265,7 +265,7 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
                     </div>
                 </div>
 
-                <div class="p-3 bg-light rounded-3 mb-4 border">
+                <div class="p-3 bg-body-tertiary rounded-3 mb-4 border">
                     <h5 class="fw-bold text-danger mb-2"><i class="bi bi-google me-2"></i>Google OAuth 2.0</h5>
                     <div class="row g-3">
                         <div class="col-md-6">
@@ -279,7 +279,7 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
                     </div>
                 </div>
 
-                <div class="p-3 bg-light rounded-3 mb-4 border">
+                <div class="p-3 bg-body-tertiary rounded-3 mb-4 border">
                     <h5 class="fw-bold text-info mb-2"><i class="bi bi-microsoft me-2"></i>Microsoft Azure AD</h5>
                     <div class="row g-3">
                         <div class="col-md-6">
@@ -293,7 +293,7 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
                     </div>
                 </div>
 
-                <div class="p-3 bg-light rounded-3 border">
+                <div class="p-3 bg-body-tertiary rounded-3 border">
                     <h5 class="fw-bold text-primary mb-2"><i class="bi bi-facebook me-2"></i>Facebook Login</h5>
                     <div class="row g-3">
                         <div class="col-md-6">
@@ -327,7 +327,7 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
 
                     <!-- Gemini Specific Fields -->
                     <div class="col-12" id="geminiGroup">
-                        <div class="p-3 bg-light rounded-3 border">
+                        <div class="p-3 bg-body-tertiary rounded-3 border">
                             <label class="form-label fw-semibold">Gemini API Key</label>
                             <input type="password" name="ai_api_key" value="<?= htmlspecialchars(setting('ai_api_key', '')) ?>" class="form-control" placeholder="AIzaSy... (leave empty if not using Gemini)">
                         </div>
@@ -335,7 +335,7 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
 
                     <!-- Ollama Specific Fields -->
                     <div class="col-12" id="ollamaGroup">
-                        <div class="p-3 bg-light rounded-3 border">
+                        <div class="p-3 bg-body-tertiary rounded-3 border">
                             <label class="form-label fw-semibold">Ollama Server Endpoint URL</label>
                             <input type="url" name="ai_endpoint" value="<?= htmlspecialchars(setting('ai_endpoint', '')) ?>" class="form-control" placeholder="http://localhost:11434 (leave empty for default)">
                         </div>
@@ -343,7 +343,7 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
 
                     <!-- OpenAI-Compatible Chat Specific Fields -->
                     <div class="col-12" id="openaiGroup">
-                        <div class="p-3 bg-light rounded-3 border">
+                        <div class="p-3 bg-body-tertiary rounded-3 border">
                             <div class="row g-3">
                                 <div class="col-md-8">
                                     <label class="form-label fw-semibold">Chat Completions Endpoint URL</label>
@@ -364,19 +364,19 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
                 <div class="mb-3">
                     <label class="form-label fw-semibold"><i class="bi bi-discord text-primary me-1"></i> Discord Channel Webhook URL</label>
                     <input type="url" name="discord_webhook_url" value="<?= htmlspecialchars(setting('discord_webhook_url', '')) ?>" class="form-control" placeholder="https://discord.com/api/webhooks/... (leave empty to disable)">
-                    <small class="text-muted">Probes will post down/up alert embeds directly to this Discord channel.</small>
+                    <small class="text-body-secondary">Probes will post down/up alert embeds directly to this Discord channel.</small>
                 </div>
 
                 <!-- Cloudflare Zero Trust Tunnel Section -->
-                <div class="p-4 bg-light rounded-3 border mb-4">
+                <div class="p-4 bg-body-tertiary rounded-3 border mb-4">
                     <div class="d-flex align-items-center justify-content-between mb-2">
                         <div class="d-flex align-items-center gap-2">
-                            <span class="p-2 bg-warning bg-opacity-10 text-dark rounded-3 fs-4">
+                            <span class="p-2 bg-warning bg-opacity-10 text-warning rounded-3 fs-4">
                                 <i class="bi bi-shield-shaded"></i>
                             </span>
                             <div>
                                 <h5 class="fw-bold mb-0">Cloudflare Zero Trust Tunnel Monitor (Optional)</h5>
-                                <p class="text-muted small mb-0">Monitor the live health status of your private Cloudflare Tunnel (cloudflared).</p>
+                                <p class="text-body-secondary small mb-0">Monitor the live health status of your private Cloudflare Tunnel (cloudflared).</p>
                             </div>
                         </div>
                         <div class="form-check form-switch fs-6">
@@ -384,6 +384,53 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
                             <label class="form-check-label fw-semibold" for="tunnelPrimarySwitch">Place in Core Systems</label>
                         </div>
                     </div>
+
+                    <!-- Detailed Collapsible Setup Guide for Cloudflare Tunnel -->
+                    <div class="alert alert-info border-info-subtle mb-3 p-3 mt-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <strong class="text-body small"><i class="bi bi-info-circle me-1 text-primary"></i> How to setup Cloudflare Zero Trust Tunnel Monitoring:</strong>
+                            <button class="btn btn-sm btn-link p-0 text-decoration-none small fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#tunnelGuideCollapse">
+                                Show Setup Guide <i class="bi bi-chevron-down ms-1"></i>
+                            </button>
+                        </div>
+                        <div class="collapse mt-3 pt-2 border-top border-info-subtle small text-body" id="tunnelGuideCollapse">
+                            <ol class="ps-3 mb-2">
+                                <li class="mb-2">
+                                    <strong>1. Locate your Cloudflare Account ID:</strong>
+                                    <div class="text-body-secondary mt-1">
+                                        Log in to the <a href="https://dash.cloudflare.com" target="_blank" class="text-primary fw-semibold">Cloudflare Dashboard</a>. Choose any domain or check your browser address bar: <code>https://dash.cloudflare.com/&lt;ACCOUNT_ID&gt;</code>. Alternatively, on any domain Overview page, scroll down the right sidebar to copy the 32-character <strong>Account ID</strong>.
+                                    </div>
+                                </li>
+                                <li class="mb-2">
+                                    <strong>2. Locate your Tunnel ID (UUID):</strong>
+                                    <div class="text-body-secondary mt-1">
+                                        Open the <strong>Zero Trust Dashboard</strong> &rarr; <strong>Networks</strong> &rarr; <strong>Tunnels</strong>. Select your active tunnel. The <strong>Tunnel ID</strong> (UUID format <code>xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx</code>) is displayed in the tunnel overview and in the URL (<code>/tunnels/&lt;TUNNEL_ID&gt;</code>).
+                                    </div>
+                                </li>
+                                <li class="mb-2">
+                                    <strong>3. Create an API Token with Read permission:</strong>
+                                    <div class="text-body-secondary mt-1">
+                                        In Cloudflare Dashboard, click your profile in the top-right corner &rarr; <strong>My Profile</strong> &rarr; <strong>API Tokens</strong> &rarr; <strong>Create Token</strong>:
+                                        <ul class="mt-1 ps-3">
+                                            <li>Scroll to the bottom and click <strong>Create Custom Token</strong>.</li>
+                                            <li><strong>Token name:</strong> e.g. <code>StatusPage - Tunnel Reader</code>.</li>
+                                            <li><strong>Permissions:</strong> Add <code>Account</code> &gt; <code>Cloudflare Tunnel</code> &gt; <code>Read</code>.</li>
+                                            <li><strong>Account Resources:</strong> Set <code>Include</code> &gt; <code>All accounts</code> (or select your specific account).</li>
+                                            <li>Click <strong>Continue to summary</strong> &rarr; <strong>Create Token</strong>.</li>
+                                            <li>Copy the generated secret token and paste it into the <strong>Cloudflare API Token</strong> field below.</li>
+                                        </ul>
+                                    </div>
+                                </li>
+                                <li class="mb-1">
+                                    <strong>4. Tier Placement:</strong>
+                                    <div class="text-body-secondary mt-1">
+                                        Keep <em>"Place in Core Systems"</em> checked if tunnel downtime should mark the global status banner as Major Outage. If disabled, it will be placed as a secondary service under the Cloudflare group.
+                                    </div>
+                                </li>
+                            </ol>
+                        </div>
+                    </div>
+
                     <div class="row g-3 mt-1">
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">Custom Tunnel Label</label>
@@ -400,13 +447,13 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">Cloudflare API Token</label>
                             <input type="password" name="cf_tunnel_api_token" value="<?= htmlspecialchars(setting('cf_tunnel_api_token', '')) ?>" class="form-control font-monospace" placeholder="API Token with Tunnel:Read permission">
-                            <small class="text-muted">Requires <code>Account &gt; Cloudflare Tunnel &gt; Read</code> permissions.</small>
+                            <small class="text-body-secondary">Requires <code>Account &gt; Cloudflare Tunnel &gt; Read</code> permissions.</small>
                         </div>
                     </div>
                 </div>
 
                 <!-- Cloudflare Edge Worker Section -->
-                <div class="p-4 bg-light rounded-3 border mb-4">
+                <div class="p-4 bg-body-tertiary rounded-3 border mb-4">
                     <div class="d-flex align-items-center justify-content-between mb-3">
                         <div class="d-flex align-items-center gap-2">
                             <span class="p-2 bg-primary bg-opacity-10 text-primary rounded-3 fs-4">
@@ -414,7 +461,7 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
                             </span>
                             <div>
                                 <h5 class="fw-bold mb-0">Cloudflare Edge Worker Probes & Sentinel (Optional)</h5>
-                                <p class="text-muted small mb-0">Run multi-location latency probes from Cloudflare edge and monitor server downtime autonomously.</p>
+                                <p class="text-body-secondary small mb-0">Run multi-location latency probes from Cloudflare edge and monitor server downtime autonomously.</p>
                             </div>
                         </div>
                         <div class="form-check form-switch fs-5">
@@ -424,12 +471,12 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
 
                     <div class="alert alert-info border-info-subtle mb-3 p-3">
                         <div class="d-flex justify-content-between align-items-center">
-                            <strong class="text-dark small"><i class="bi bi-info-circle me-1 text-primary"></i> How to setup your Cloudflare Worker:</strong>
+                            <strong class="text-body small"><i class="bi bi-info-circle me-1 text-primary"></i> How to setup your Cloudflare Worker:</strong>
                             <button class="btn btn-sm btn-link p-0 text-decoration-none small fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#workerGuideCollapse">
                                 Show Setup Guide <i class="bi bi-chevron-down ms-1"></i>
                             </button>
                         </div>
-                        <div class="collapse mt-3 pt-2 border-top border-info-subtle small text-dark" id="workerGuideCollapse">
+                        <div class="collapse mt-3 pt-2 border-top border-info-subtle small text-body" id="workerGuideCollapse">
                             <ol class="ps-3 mb-2">
                                 <li class="mb-1">
                                     <strong>Get the template code:</strong> Open the local file <code>edge/cloudflare-worker.js</code> in your repository.
@@ -439,7 +486,7 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
                                 </li>
                                 <li class="mb-1">
                                     <strong>Configure Variables (Worker Settings &rarr; Variables):</strong>
-                                    <ul class="mt-1 ps-3 text-muted">
+                                    <ul class="mt-1 ps-3 text-body-secondary">
                                         <li><code>SHARED_SECRET_TOKEN</code>: A custom password/token (must match the token entered below).</li>
                                         <li><code>ORIGIN_STATUS_URL</code>: Your status page URL (<code><?= htmlspecialchars(app_url()) ?></code>).</li>
                                         <li><code>DISCORD_WEBHOOK_URL</code>: <em>(Optional)</em> Discord webhook for alerts if your origin server dies.</li>
@@ -458,19 +505,19 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">Worker URL</label>
                             <input type="url" name="edge_worker_url" value="<?= htmlspecialchars(setting('edge_worker_url', '')) ?>" class="form-control" placeholder="https://my-edge-probe.workers.dev">
-                            <small class="text-muted">The public <code>.workers.dev</code> endpoint of your deployed worker.</small>
+                            <small class="text-body-secondary">The public <code>.workers.dev</code> endpoint of your deployed worker.</small>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">Shared Secret Token</label>
                             <input type="password" name="edge_worker_token" value="<?= htmlspecialchars(setting('edge_worker_token', '')) ?>" class="form-control" placeholder="Matches SHARED_SECRET_TOKEN in Worker">
-                            <small class="text-muted">Used to authenticate requests between your server and the Cloudflare Worker.</small>
+                            <small class="text-body-secondary">Used to authenticate requests between your server and the Cloudflare Worker.</small>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="card-footer bg-light p-3 text-end">
+        <div class="card-footer bg-body-tertiary border-top p-3 text-end">
             <button type="submit" class="btn btn-primary px-4 fw-semibold">
                 <i class="bi bi-save me-1"></i> Save Platform Settings
             </button>
@@ -510,8 +557,8 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
                     </select>
                 </div>
 
-                <div class="p-3 bg-light rounded-3 border small">
-                    <strong class="text-dark d-block mb-1">Currently Enabled Languages:</strong>
+                <div class="p-3 bg-body-tertiary rounded-3 border small">
+                    <strong class="text-body d-block mb-1">Currently Enabled Languages:</strong>
                     <div class="d-flex flex-wrap gap-1">
                         <?php foreach ($enabledLocales as $code): ?>
                             <span class="badge bg-<?= $code === 'en' ? 'secondary' : 'primary' ?>">
@@ -519,7 +566,7 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
                             </span>
                         <?php endforeach; ?>
                     </div>
-                    <small class="text-muted d-block mt-2">Selecting "All Enabled Languages" will generate/sync all badges above except English.</small>
+                    <small class="text-body-secondary d-block mt-2">Selecting "All Enabled Languages" will generate/sync all badges above except English.</small>
                 </div>
             </div>
             <div class="modal-footer">
