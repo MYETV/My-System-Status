@@ -102,12 +102,15 @@ $allMaintenances = $allMaintenances ?? [];
     /* Subservice problem warning indicator */
     .uptime-subservice-dot {
         position: absolute;
-        top: 2px;
-        right: 0px;
-        width: 5px;
-        height: 5px;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 6px;
+        height: 6px;
         border-radius: 50%;
         background-color: #f59e0b;
+        border: 1px solid rgba(0, 0, 0, 0.5);
+        box-shadow: 0 0 3px rgba(245, 158, 11, 0.9);
         pointer-events: none;
         z-index: 4;
     }
