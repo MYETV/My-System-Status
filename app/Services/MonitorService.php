@@ -61,14 +61,24 @@ class MonitorService
     }
 
     /**
-     * Detect if system was offline/powered down and backfill blackout logs
+     * Detect if system was offline/powered down and backfill blackout logs (excludes external cloud feeds).
      */
     private function detectAndBackfillBlackouts(): void
     {
         $stmt = $this->db->query("
             SELECT id, name, interval_seconds, last_check 
             FROM monitors 
-            WHERE is_active = 1 AND last_check IS NOT NULL
+            WHERE is_active = 1 
+              AND last_check IS NOT NULL
+              AND target NOT LIKE 'https://www.cloudflarestatus.com%'
+              AND target NOT LIKE 'https://status.aws.amazon.com%'
+              AND target NOT LIKE 'https://health.aws.amazon.com%'
+              AND target NOT LIKE 'https://azure.status.microsoft%'
+              AND target NOT LIKE 'https://status.stripe.com%'
+              AND target NOT LIKE 'https://www.paypal-status.com%'
+              AND target NOT LIKE 'https://www.githubstatus.com%'
+              AND target NOT LIKE 'https://dash.cloudflare.com%'
+              AND name NOT LIKE 'Tunnel:%'
         ");
         $monitors = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
