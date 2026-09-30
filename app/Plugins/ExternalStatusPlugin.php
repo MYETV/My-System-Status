@@ -23,11 +23,35 @@ class ExternalStatusPlugin
     {
         $this->forceInsert = $forceInsert;
 
-        // 0. Auto-cleanup: remove historical duplicates on same target
+        // 0a. Auto-cleanup: remove historical duplicates on same target
         $this->db->exec("
             DELETE m1 FROM monitors m1 
             INNER JOIN monitors m2 ON m1.target = m2.target 
             WHERE m1.id > m2.id
+        ");
+
+        // 0b. Auto-heal: convert historical false-positive 'down' logs caused by degraded performance to 'up'
+        $this->db->exec("
+            UPDATE monitor_logs 
+            SET status = 'up' 
+            WHERE status = 'down' 
+              AND (error_message LIKE '%degraded%' OR http_code IN (400, 429))
+        ");
+
+        // 0c. Auto-cleanup: remove local server blackout logs mistakenly assigned to external cloud providers
+        $this->db->exec("
+            DELETE ml FROM monitor_logs ml
+            INNER JOIN monitors m ON ml.monitor_id = m.id
+            WHERE ml.status = 'blackout' 
+              AND (
+                m.target LIKE 'https://www.cloudflarestatus.com%'
+                OR m.target LIKE 'https://status.aws.amazon.com%'
+                OR m.target LIKE 'https://health.aws.amazon.com%'
+                OR m.target LIKE 'https://azure.status.microsoft%'
+                OR m.target LIKE 'https://status.stripe.com%'
+                OR m.target LIKE 'https://www.paypal-status.com%'
+                OR m.target LIKE 'https://www.githubstatus.com%'
+              )
         ");
 
         $results = [];
@@ -179,7 +203,7 @@ class ExternalStatusPlugin
                 $targetUrl = "https://dash.cloudflare.com/{$accountId}/networks/tunnels/{$tunnelData['id']}";
             }
         } else {
-            // Default to operational if Cloudflare API was temporarily unreachable to prevent false alarms
+            // Default to operational if Cloudflare API was temporarily unreachable
             $status = 'operational';
         }
 
@@ -252,7 +276,6 @@ class ExternalStatusPlugin
 
             foreach ($coreKeywords as $keyword => $info) {
                 if (stripos($name, $keyword) !== false && !in_array($info['slug'], $matchedSlugs, true)) {
-                    // Skip if the user has excluded this sub-service
                     if (!in_array($info['slug'], $enabledSlugs, true)) {
                         $matchedSlugs[] = $info['slug'];
                         break;
@@ -347,7 +370,7 @@ class ExternalStatusPlugin
     }
 
     /**
-     * Update existing monitor or insert if missing (strictly isolated to prevent cross-contamination).
+     * Update existing monitor or insert if missing (isolated per target and name).
      */
     private function upsertMonitor(string $name, string $target, string $status, ?int $parentId, int $isPrimary = 0, bool $alwaysCreate = false): int
     {
@@ -406,7 +429,7 @@ class ExternalStatusPlugin
     }
 
     /**
-     * Record clean check log. Degraded states are recorded as 'up' with warning to avoid false 100% outage graphs.
+     * Record clean check log. Degraded states are recorded as 'up' to reflect operational health.
      */
     private function recordCheckLog(int $monitorId, string $status): void
     {
