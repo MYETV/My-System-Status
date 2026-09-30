@@ -100,12 +100,12 @@ class StatusPageController
             }
         }
 
-        // 6. Real 90-Day Probe Logs Aggregation
+        // 6. Real 90-Day Probe Logs Aggregation (calculated independently per monitor)
         $histStmt = $this->db->query("
             SELECT monitor_id, DATE(created_at) as check_date,
-                   SUM(status = 'blackout') as blackout_count,
-                   SUM(status = 'down') as down_count,
-                   SUM(status = 'up') as up_count,
+                   SUM(LOWER(status) = 'blackout') as blackout_count,
+                   SUM(LOWER(status) = 'down') as down_count,
+                   SUM(LOWER(status) = 'up') as up_count,
                    COUNT(*) as total_checks
             FROM monitor_logs
             WHERE created_at >= DATE_SUB(NOW(), INTERVAL 90 DAY)
@@ -361,23 +361,23 @@ class StatusPageController
             FROM monitor_logs 
             WHERE monitor_id = ? AND created_at >= ? AND created_at <= ? 
             ORDER BY created_at DESC 
-            LIMIT 1500
+            LIMIT 2000
         ");
         $stmt->execute([$monitorId, $startWindow, $endWindow]);
         $logs = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         $formatted = [];
         foreach ($logs as $log) {
-            $st = $log['status'] ?? 'down';
+            $st = strtolower(trim($log['status'] ?? 'down'));
 
             if ($st === 'up') {
-                $statusBadge = '<span class="badge bg-success">UP</span>';
+                $statusBadge = '<span class="badge bg-success bg-opacity-25 text-success border border-success border-opacity-50">UP</span>';
             } elseif ($st === 'blackout') {
-                $statusBadge = '<span class="badge bg-dark">BLACKOUT</span>';
+                $statusBadge = '<span class="badge bg-dark text-white border border-light border-opacity-25 shadow-sm">BLACKOUT</span>';
             } elseif ($st === 'timeout') {
-                $statusBadge = '<span class="badge bg-warning text-dark">TIMEOUT</span>';
+                $statusBadge = '<span class="badge bg-warning bg-opacity-25 text-warning border border-warning border-opacity-50">TIMEOUT</span>';
             } else {
-                $statusBadge = '<span class="badge bg-danger">DOWN</span>';
+                $statusBadge = '<span class="badge bg-danger bg-opacity-25 text-danger border border-danger border-opacity-50">DOWN</span>';
             }
 
             $detailsHtml = !empty($log['error_message'])
@@ -387,10 +387,10 @@ class StatusPageController
             $timeFormatted = format_date($log['created_at'], 'H:i:s');
 
             $formatted[] = [
-                'time'      => "<span class='font-monospace small text-dark'>{$timeFormatted}</span>",
+                'time'      => "<span class='font-monospace small text-body fw-medium'>{$timeFormatted}</span>",
                 'status'    => $statusBadge,
-                'latency'   => "<span class='font-monospace'>" . (int)($log['response_time_ms'] ?? 0) . " ms</span>",
-                'http_code' => "<code>" . htmlspecialchars($log['http_code'] ?? '-') . "</code>",
+                'latency'   => "<span class='font-monospace text-body'>" . (int)($log['response_time_ms'] ?? 0) . " ms</span>",
+                'http_code' => "<code class='text-body-emphasis px-1 py-0 rounded border border-secondary border-opacity-25 bg-body-tertiary'>" . htmlspecialchars($log['http_code'] ?? '-') . "</code>",
                 'details'   => $detailsHtml
             ];
         }
