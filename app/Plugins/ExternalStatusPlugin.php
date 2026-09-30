@@ -179,7 +179,7 @@ class ExternalStatusPlugin
                 $targetUrl = "https://dash.cloudflare.com/{$accountId}/networks/tunnels/{$tunnelData['id']}";
             }
         } else {
-            // Default to operational if Cloudflare API was completely unreachable to prevent false positives
+            // Default to operational if Cloudflare API was temporarily unreachable to prevent false alarms
             $status = 'operational';
         }
 
@@ -196,17 +196,16 @@ class ExternalStatusPlugin
 
     public function syncCloudflare(): string
     {
-        $opts = ['http' => ['timeout' => 10, 'user_agent' => 'MySystemStatus/1.0']];
-        $json = @file_get_contents('https://www.cloudflarestatus.com/api/v2/summary.json', false, stream_context_create($opts));
-        if (!$json) return 'unknown';
+        $data = $this->fetchJson('https://www.cloudflarestatus.com/api/v2/summary.json');
+        if (!$data) return 'unknown';
 
-        $data = json_decode($json, true);
-        $overallIndicator = $data['status']['indicator'] ?? 'none';
+        $overallIndicator = strtolower($data['status']['indicator'] ?? 'none');
 
         $parentStatus = match ($overallIndicator) {
-            'none'  => 'operational',
-            'minor' => 'degraded',
-            default => 'down'
+            'none', 'maintenance' => 'operational',
+            'minor'               => 'degraded',
+            'major', 'critical'   => 'down',
+            default               => 'operational'
         };
 
         $parentId = $this->upsertMonitor('Cloudflare Global Network', 'https://www.cloudflarestatus.com', $parentStatus, null, 0);
@@ -259,10 +258,12 @@ class ExternalStatusPlugin
                         break;
                     }
 
-                    $cStatus = match ($comp['status'] ?? '') {
-                        'operational' => 'operational',
+                    $rawCompStatus = strtolower($comp['status'] ?? 'operational');
+                    $cStatus = match ($rawCompStatus) {
+                        'operational', 'under_maintenance'       => 'operational',
                         'degraded_performance', 'partial_outage' => 'degraded',
-                        default => 'down'
+                        'major_outage'                           => 'down',
+                        default                                  => 'operational'
                     };
 
                     $targetUrl = "https://www.cloudflarestatus.com#{$info['slug']}";
@@ -278,15 +279,11 @@ class ExternalStatusPlugin
 
     public function syncAws(): string
     {
-        $opts = ['http' => ['timeout' => 8, 'user_agent' => 'MySystemStatus/1.0']];
-        $json = @file_get_contents('https://status.aws.amazon.com/data.json', false, stream_context_create($opts));
+        $data = $this->fetchJson('https://status.aws.amazon.com/data.json');
 
         $status = 'operational';
-        if ($json) {
-            $data = json_decode($json, true);
-            if (!empty($data['current']) && is_array($data['current'])) {
-                $status = 'degraded';
-            }
+        if ($data && !empty($data['current']) && is_array($data['current'])) {
+            $status = 'degraded';
         }
 
         $this->upsertMonitor('Amazon AWS Infrastructure', 'https://health.aws.amazon.com', $status, null, 0);
@@ -295,7 +292,7 @@ class ExternalStatusPlugin
 
     public function syncAzure(): string
     {
-        $opts = ['http' => ['timeout' => 8, 'user_agent' => 'MySystemStatus/1.0']];
+        $opts = ['http' => ['timeout' => 8, 'user_agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)']];
         $html = @file_get_contents('https://azure.status.microsoft/en-us/status', false, stream_context_create($opts));
 
         $status = 'operational';
@@ -309,19 +306,15 @@ class ExternalStatusPlugin
 
     public function syncPayPal(): string
     {
-        $opts = ['http' => ['timeout' => 8, 'user_agent' => 'MySystemStatus/1.0']];
-        $json = @file_get_contents('https://www.paypal-status.com/api/v1/components', false, stream_context_create($opts));
+        $data = $this->fetchJson('https://www.paypal-status.com/api/v1/components');
 
         $status = 'operational';
-        if ($json) {
-            $data = json_decode($json, true);
-            if (is_array($data)) {
-                foreach ($data as $item) {
-                    $itemStatus = strtoupper($item['status'] ?? '');
-                    if ($itemStatus !== 'OPERATIONAL' && $itemStatus !== '') {
-                        $status = 'degraded';
-                        break;
-                    }
+        if ($data && is_array($data)) {
+            foreach ($data as $item) {
+                $itemStatus = strtoupper($item['status'] ?? '');
+                if ($itemStatus !== 'OPERATIONAL' && $itemStatus !== '') {
+                    $status = 'degraded';
+                    break;
                 }
             }
         }
@@ -332,20 +325,20 @@ class ExternalStatusPlugin
 
     public function syncStripe(): string
     {
-        $json = @file_get_contents('https://status.stripe.com/current');
-        $status = ($json && !str_contains($json, 'outage')) ? 'operational' : 'degraded';
+        $opts = ['http' => ['timeout' => 8, 'user_agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)']];
+        $html = @file_get_contents('https://status.stripe.com/current', false, stream_context_create($opts));
+        $status = ($html && !str_contains($html, 'outage')) ? 'operational' : 'degraded';
         $this->upsertMonitor('Stripe Payments Engine', 'https://status.stripe.com', $status, null, 0);
         return $status;
     }
 
     public function syncGitHub(): string
     {
-        $json = @file_get_contents('https://www.githubstatus.com/api/v2/status.json');
+        $data = $this->fetchJson('https://www.githubstatus.com/api/v2/status.json');
         $status = 'operational';
 
-        if ($json) {
-            $data = json_decode($json, true);
-            $indicator = $data['status']['indicator'] ?? 'none';
+        if ($data) {
+            $indicator = strtolower($data['status']['indicator'] ?? 'none');
             $status = ($indicator === 'none') ? 'operational' : 'degraded';
         }
 
@@ -354,21 +347,32 @@ class ExternalStatusPlugin
     }
 
     /**
-     * Update existing monitor or insert if missing.
+     * Update existing monitor or insert if missing (strictly isolated to prevent cross-contamination).
      */
     private function upsertMonitor(string $name, string $target, string $status, ?int $parentId, int $isPrimary = 0, bool $alwaysCreate = false): int
     {
-        $stmt = $this->db->prepare("
-            SELECT id, is_active 
-            FROM monitors 
-            WHERE target = ? 
-               OR (name = ? AND target LIKE '%dash.cloudflare.com%')
-               OR target LIKE '%dash.cloudflare.com%' 
-               OR name LIKE 'Tunnel:%' 
-               OR name = ?
-            LIMIT 1
-        ");
-        $stmt->execute([$target, $name, $name]);
+        $isTunnel = str_contains($target, 'dash.cloudflare.com');
+
+        if ($isTunnel) {
+            $stmt = $this->db->prepare("
+                SELECT id, is_active 
+                FROM monitors 
+                WHERE target = ? 
+                   OR (target LIKE '%dash.cloudflare.com%' AND name LIKE 'Tunnel:%')
+                   OR name = ?
+                LIMIT 1
+            ");
+            $stmt->execute([$target, $name]);
+        } else {
+            $stmt = $this->db->prepare("
+                SELECT id, is_active 
+                FROM monitors 
+                WHERE target = ? OR name = ?
+                LIMIT 1
+            ");
+            $stmt->execute([$target, $name]);
+        }
+
         $existing = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if ($existing) {
@@ -401,10 +405,13 @@ class ExternalStatusPlugin
         return 0;
     }
 
+    /**
+     * Record clean check log. Degraded states are recorded as 'up' with warning to avoid false 100% outage graphs.
+     */
     private function recordCheckLog(int $monitorId, string $status): void
     {
-        $shortStatus = ($status === 'operational') ? 'up' : 'down';
-        $httpCode    = ($status === 'operational') ? 200 : (($status === 'degraded') ? 400 : 502);
+        $shortStatus = ($status === 'down') ? 'down' : 'up';
+        $httpCode    = ($status === 'operational') ? 200 : (($status === 'degraded') ? 429 : 503);
         $errMessage  = ($status === 'operational') ? null : "Service reported {$status} performance";
 
         try {
@@ -416,6 +423,53 @@ class ExternalStatusPlugin
         } catch (\Throwable $e) {
             // Silently ignore log write errors
         }
+    }
+
+    /**
+     * Resilient JSON fetcher using cURL with realistic browser headers and fallback.
+     */
+    private function fetchJson(string $url): ?array
+    {
+        $response = null;
+
+        if (function_exists('curl_init')) {
+            $ch = curl_init($url);
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT        => 10,
+                CURLOPT_FOLLOWLOCATION => true,
+                CURLOPT_SSL_VERIFYPEER => true,
+                CURLOPT_USERAGENT      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                CURLOPT_HTTPHEADER     => [
+                    'Accept: application/json, text/plain, */*',
+                    'Cache-Control: no-cache'
+                ]
+            ]);
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            if ($httpCode !== 200 || empty($response)) {
+                $response = null;
+            }
+        }
+
+        if (!$response && ini_get('allow_url_fopen')) {
+            $opts = [
+                'http' => [
+                    'timeout'    => 10,
+                    'user_agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                ]
+            ];
+            $response = @file_get_contents($url, false, stream_context_create($opts));
+        }
+
+        if (!$response) {
+            return null;
+        }
+
+        $decoded = json_decode($response, true);
+        return is_array($decoded) ? $decoded : null;
     }
 
     private function disableFeedMonitors(string $targetPrefix): void
