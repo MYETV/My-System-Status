@@ -99,6 +99,19 @@ $allMaintenances = $allMaintenances ?? [];
         z-index: 3;
     }
 
+    /* Subservice problem warning indicator */
+    .uptime-subservice-dot {
+        position: absolute;
+        top: 2px;
+        right: 0px;
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background-color: #f59e0b;
+        pointer-events: none;
+        z-index: 4;
+    }
+
     /* Interactive modal stat cards */
     .modal-stat-card {
         transition: all 0.15s ease-in-out;
@@ -122,6 +135,34 @@ $allMaintenances = $allMaintenances ?? [];
     .monitor-card:hover {
         border-color: var(--bs-border-color-translucent);
         box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06) !important;
+    }
+
+    /* Dark mode table compatibility */
+    #dayModalLogsTable th {
+        background-color: var(--bs-tertiary-bg);
+        color: var(--bs-body-color);
+        border-bottom: 2px solid var(--bs-border-color);
+    }
+    #dayModalLogsTable td {
+        background-color: var(--bs-body-bg);
+        color: var(--bs-body-color);
+        border-color: var(--bs-border-color-translucent);
+    }
+    .dataTables_wrapper .dataTables_paginate .paginate_button {
+        color: var(--bs-body-color) !important;
+    }
+    .dataTables_wrapper .dataTables_info,
+    .dataTables_wrapper .dataTables_length,
+    .dataTables_wrapper .dataTables_filter {
+        color: var(--bs-secondary-color) !important;
+    }
+    .dataTables_wrapper .dataTables_filter input,
+    .dataTables_wrapper .dataTables_length select {
+        background-color: var(--bs-body-bg);
+        color: var(--bs-body-color);
+        border: 1px solid var(--bs-border-color);
+        border-radius: 4px;
+        padding: 4px 8px;
     }
 </style>
 
@@ -254,20 +295,25 @@ $allMaintenances = $allMaintenances ?? [];
         $isDegraded  = ($monitor['current_status'] === 'degraded');
         $mId         = (int)$monitor['id'];
 
-        // Cluster Aggregation: Parent combines telemetry from all sub-services
+        // Strict isolation: Parent only uses its OWN probe telemetry
         $monitorHistory = $uptimeHistory[$mId] ?? [];
+
+        // Precalculate child probe issues per day for contextual alerts
+        $childIssuesByDate = [];
         if ($hasChildren) {
             foreach ($monitor['children'] as $child) {
                 $cId = (int)$child['id'];
                 if (!empty($uptimeHistory[$cId])) {
                     foreach ($uptimeHistory[$cId] as $dateKey => $cStats) {
-                        if (!isset($monitorHistory[$dateKey])) {
-                            $monitorHistory[$dateKey] = ['total' => 0, 'down' => 0, 'up' => 0, 'blackout' => 0];
+                        $cDown  = (int)($cStats['down'] ?? 0);
+                        $cBlack = (int)($cStats['blackout'] ?? 0);
+                        if ($cDown > 0 || $cBlack > 0) {
+                            $childIssuesByDate[$dateKey][] = [
+                                'name'     => $child['name'],
+                                'down'     => $cDown,
+                                'blackout' => $cBlack
+                            ];
                         }
-                        $monitorHistory[$dateKey]['total']    += (int)($cStats['total'] ?? 0);
-                        $monitorHistory[$dateKey]['down']     += (int)($cStats['down'] ?? 0);
-                        $monitorHistory[$dateKey]['up']       += (int)($cStats['up'] ?? 0);
-                        $monitorHistory[$dateKey]['blackout'] += (int)($cStats['blackout'] ?? 0);
                     }
                 }
             }
@@ -336,8 +382,8 @@ $allMaintenances = $allMaintenances ?? [];
                             $blackChecks = (int)($dayData['blackout'] ?? 0);
                             $upChecks    = (int)($dayData['up'] ?? max(0, $totalChecks - $downChecks - $blackChecks));
 
-                            $blackPct = ($totalChecks > 0) ? round(($blackChecks / $totalChecks) * 100, 1) : 0;
-                            $downPct  = ($totalChecks > 0) ? round(($downChecks / $totalChecks) * 100, 1) : 0;
+                            $blackPct = ($totalChecks > 0) ? round(($blackChecks / $totalChecks) * 100, 2) : 0;
+                            $downPct  = ($totalChecks > 0) ? round(($downChecks / $totalChecks) * 100, 2) : 0;
                             $dailyUptimePct = ($totalChecks > 0) ? round(($upChecks / $totalChecks) * 100, 2) : 100.00;
 
                             $dayIncidents = [];
@@ -367,44 +413,44 @@ $allMaintenances = $allMaintenances ?? [];
 
                             $hasMaintenance = !empty($dayMaintenances);
                             $hasIncident    = !empty($dayIncidents);
+                            $hasChildIssues = !empty($childIssuesByDate[$dayDate]);
 
                             $barClass = 'uptime-bar';
                             $barStyle = '';
 
-                            if ($day === 0) {
-                                if ($isDown) {
-                                    $barStyle = 'style="background-color: #ef4444;"';
-                                    $statusDesc = "<span style='color: #ef4444;'>●</span> " . __('status.major_outage');
-                                } elseif ($isDegraded) {
-                                    $barStyle = 'style="background-color: #f59e0b;"';
-                                    $statusDesc = "<span style='color: #f59e0b;'>●</span> " . __('status.degraded');
-                                } else {
-                                    $barStyle = 'style="background-color: #10b981;"';
-                                    $statusDesc = "<span style='color: #10b981;'>●</span> 100% " . __('status.operational');
-                                }
-                            } elseif ($blackChecks > 0 && $downChecks > 0) {
-                                $vBlack = max(15, min(40, (int)$blackPct));
-                                $vRed   = max(15, min(40, (int)$downPct));
+                            // Realistic rendering: historical telemetry is never overwritten by instant status
+                            if ($blackChecks > 0 && $downChecks > 0) {
+                                $vBlack = max(18, min(45, (int)$blackPct));
+                                $vRed   = max(18, min(45, (int)$downPct));
                                 $gStart = $vBlack;
                                 $gEnd   = 100 - $vRed;
                                 $barStyle = "style=\"background: linear-gradient(to bottom, #0f172a 0%, #0f172a {$gStart}%, #10b981 {$gStart}%, #10b981 {$gEnd}%, #ef4444 {$gEnd}%, #ef4444 100%);\"";
-                                $statusDesc = "<span style='color: #0f172a;'>⬛</span> Blackout: {$blackPct}% &bull; <span style='color: #ef4444;'>●</span> Downtime: {$downPct}%";
+                                $statusDesc = "<span style='color: #0f172a;'>⬛</span> Blackout: {$blackPct}% &bull; <span style='color: #ef4444;'>●</span> Downtime: {$downPct}% ({$dailyUptimePct}% " . __('public.uptime') . ")";
                             } elseif ($blackChecks > 0) {
                                 if ($blackPct >= 95.0) {
                                     $barStyle = 'style="background-color: #0f172a;"';
                                 } else {
-                                    $vBlack = max(15, min(85, (int)$blackPct));
+                                    $vBlack = max(18, min(85, (int)$blackPct));
                                     $barStyle = "style=\"background: linear-gradient(to bottom, #0f172a 0%, #0f172a {$vBlack}%, #10b981 {$vBlack}%, #10b981 100%);\"";
                                 }
-                                $statusDesc = "<span style='color: #0f172a;'>⬛</span> " . __('public.system_blackout') . ": {$blackPct}%";
+                                $statusDesc = "<span style='color: #0f172a;'>⬛</span> " . __('public.system_blackout') . ": {$blackPct}% ({$dailyUptimePct}% " . __('public.uptime') . ")";
                             } elseif ($downChecks > 0) {
                                 if ($downPct >= 95.0) {
                                     $barStyle = 'style="background-color: #ef4444;"';
                                 } else {
-                                    $vRed = max(15, min(85, (int)$downPct));
+                                    $vRed = max(18, min(85, (int)$downPct));
                                     $barStyle = "style=\"background: linear-gradient(to top, #ef4444 0%, #ef4444 {$vRed}%, #10b981 {$vRed}%, #10b981 100%);\"";
                                 }
                                 $statusDesc = "<span style='color: #ef4444;'>●</span> Downtime: {$downPct}% ({$dailyUptimePct}% " . __('public.uptime') . ")";
+                            } elseif ($day === 0 && ($isDown || $isDegraded)) {
+                                // Currently having an active outage without recorded batch logs yet
+                                if ($isDown) {
+                                    $barStyle = 'style="background-color: #ef4444;"';
+                                    $statusDesc = "<span style='color: #ef4444;'>●</span> " . __('status.major_outage');
+                                } else {
+                                    $barStyle = 'style="background-color: #f59e0b;"';
+                                    $statusDesc = "<span style='color: #f59e0b;'>●</span> " . __('status.degraded');
+                                }
                             } elseif ($totalChecks > 0) {
                                 $barStyle = 'style="background-color: #10b981;"';
                                 $statusDesc = "<span style='color: #10b981;'>●</span> 100% " . __('status.operational');
@@ -420,6 +466,10 @@ $allMaintenances = $allMaintenances ?? [];
                             if ($hasIncident) {
                                 $label .= "<br><span style='color: #ea580c;'>▲</span> " . count($dayIncidents) . " " . __('public.reported_incident');
                             }
+                            if ($hasChildIssues) {
+                                $childNames = implode(', ', array_map(fn($c) => htmlspecialchars($c['name']), $childIssuesByDate[$dayDate]));
+                                $label .= "<br><span style='color: #f59e0b;'>⚠️</span> Secondary telemetry had issues: {$childNames}";
+                            }
 
                             $modalPayload = [
                                 'date'          => $formattedDate,
@@ -433,6 +483,7 @@ $allMaintenances = $allMaintenances ?? [];
                                 'blackout_pct'  => $blackPct,
                                 'outages'       => $downChecks,
                                 'outage_pct'    => $downPct,
+                                'child_issues'  => $childIssuesByDate[$dayDate] ?? [],
                                 'incidents'     => array_map(fn($inc) => [
                                     'title'       => $inc['title'],
                                     'impact'      => strtoupper($inc['impact']),
@@ -474,6 +525,10 @@ $allMaintenances = $allMaintenances ?? [];
 
                             <div class="<?= $barClass ?>" <?= $barStyle ?>></div>
 
+                            <?php if ($hasChildIssues): ?>
+                                <span class="uptime-subservice-dot" title="Secondary telemetry had issues"></span>
+                            <?php endif; ?>
+
                             <?php if ($hasIncident): ?>
                                 <svg class="uptime-arrow-bottom" viewBox="0 0 10 7">
                                     <polygon points="5,0 10,7 0,7" fill="#ea580c" />
@@ -500,6 +555,7 @@ $allMaintenances = $allMaintenances ?? [];
                                     $childDegraded = ($child['current_status'] === 'degraded');
                                     $childUptime   = (float)($child['uptime_percentage'] ?? 100.00);
                                     $cId           = (int)$child['id'];
+                                    $childHistory  = $uptimeHistory[$cId] ?? [];
                                 ?>
                                 <div class="bg-body-secondary p-3 rounded-3 border">
                                     <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-1">
@@ -512,7 +568,7 @@ $allMaintenances = $allMaintenances ?? [];
                                         </span>
                                     </div>
 
-                                    <!-- Sub-service 90-Day Mini Bar -->
+                                    <!-- Sub-service 90-Day Mini Bar (Strictly its own metrics) -->
                                     <div class="uptime-graph" style="height: 20px;" role="group">
                                         <?php
                                             for ($cDay = 89; $cDay >= 0; $cDay--):
@@ -520,47 +576,54 @@ $allMaintenances = $allMaintenances ?? [];
                                                 $cDayDate  = date('Y-m-d', $cDayTime);
                                                 $cDate     = date('M d, Y', $cDayTime);
 
-                                                $cData = $uptimeHistory[$cId][$cDayDate] ?? null;
+                                                $cData = $childHistory[$cDayDate] ?? null;
 
                                                 $cTotal = (int)($cData['total'] ?? 0);
                                                 $cDown  = (int)($cData['down'] ?? 0);
                                                 $cBlack = (int)($cData['blackout'] ?? 0);
+                                                $cUp    = max(0, $cTotal - $cDown - $cBlack);
+
+                                                $cBlackPct = ($cTotal > 0) ? round(($cBlack / $cTotal) * 100, 2) : 0;
+                                                $cDownPct  = ($cTotal > 0) ? round(($cDown / $cTotal) * 100, 2) : 0;
+                                                $cUpPct    = ($cTotal > 0) ? round(($cUp / $cTotal) * 100, 2) : 100.00;
 
                                                 $cStyle = '';
                                                 $cLabel = "<strong>{$cDate}</strong><br>";
 
-                                                if ($cDay === 0) {
+                                                if ($cBlack > 0 && $cDown > 0) {
+                                                    $vBlack = max(18, min(45, (int)$cBlackPct));
+                                                    $vRed   = max(18, min(45, (int)$cDownPct));
+                                                    $gStart = $vBlack;
+                                                    $gEnd   = 100 - $vRed;
+                                                    $cStyle = "style=\"background: linear-gradient(to bottom, #0f172a 0%, #0f172a {$gStart}%, #10b981 {$gStart}%, #10b981 {$gEnd}%, #ef4444 {$gEnd}%, #ef4444 100%);\"";
+                                                    $cLabel .= "<span style='color: #0f172a;'>⬛</span> Blackout: {$cBlackPct}% &bull; <span style='color: #ef4444;'>●</span> Downtime: {$cDownPct}% ({$cUpPct}% " . __('public.uptime') . ")";
+                                                } elseif ($cBlack > 0) {
+                                                    if ($cBlackPct >= 95.0) {
+                                                        $cStyle = 'style="background-color: #0f172a;"';
+                                                    } else {
+                                                        $vBlack = max(18, min(85, (int)$cBlackPct));
+                                                        $cStyle = "style=\"background: linear-gradient(to bottom, #0f172a 0%, #0f172a {$vBlack}%, #10b981 {$vBlack}%, #10b981 100%);\"";
+                                                    }
+                                                    $cLabel .= "<span style='color: #0f172a;'>⬛</span> " . __('public.system_blackout') . ": {$cBlackPct}% ({$cUpPct}% " . __('public.uptime') . ")";
+                                                } elseif ($cDown > 0) {
+                                                    if ($cDownPct >= 95.0) {
+                                                        $cStyle = 'style="background-color: #ef4444;"';
+                                                    } else {
+                                                        $vRed = max(18, min(85, (int)$cDownPct));
+                                                        $cStyle = "style=\"background: linear-gradient(to top, #ef4444 0%, #ef4444 {$vRed}%, #10b981 {$vRed}%, #10b981 100%);\"";
+                                                    }
+                                                    $cLabel .= "<span style='color: #ef4444;'>●</span> Downtime: {$cDownPct}% ({$cUpPct}% " . __('public.uptime') . ")";
+                                                } elseif ($cDay === 0 && ($childDown || $childDegraded)) {
                                                     if ($childDown) {
                                                         $cStyle = 'style="background-color: #ef4444;"';
                                                         $cLabel .= "<span style='color: #ef4444;'>●</span> " . __('status.major_outage');
-                                                    } elseif ($childDegraded) {
+                                                    } else {
                                                         $cStyle = 'style="background-color: #f59e0b;"';
                                                         $cLabel .= "<span style='color: #f59e0b;'>●</span> " . __('status.degraded');
-                                                    } else {
-                                                        $cStyle = 'style="background-color: #10b981;"';
-                                                        $cLabel .= "<span style='color: #10b981;'>●</span> " . __('status.operational');
                                                     }
-                                                } elseif ($cBlack > 0 && $cTotal > 0) {
-                                                    $cBlackPct = round(($cBlack / $cTotal) * 100);
-                                                    if ($cBlackPct >= 95) {
-                                                        $cStyle = 'style="background-color: #0f172a;"';
-                                                    } else {
-                                                        $vBlack = max(15, min(85, $cBlackPct));
-                                                        $cStyle = "style=\"background: linear-gradient(to bottom, #0f172a 0%, #0f172a {$vBlack}%, #10b981 {$vBlack}%, #10b981 100%);\"";
-                                                    }
-                                                    $cLabel .= "<span style='color: #0f172a;'>⬛</span> " . __('public.system_blackout') . ": {$cBlackPct}%";
-                                                } elseif ($cDown > 0 && $cTotal > 0) {
-                                                    $cDownPct = round(($cDown / $cTotal) * 100);
-                                                    if ($cDownPct >= 95) {
-                                                        $cStyle = 'style="background-color: #ef4444;"';
-                                                    } else {
-                                                        $vRed = max(15, min(85, $cDownPct));
-                                                        $cStyle = "style=\"background: linear-gradient(to top, #ef4444 0%, #ef4444 {$vRed}%, #10b981 {$vRed}%, #10b981 100%);\"";
-                                                    }
-                                                    $cLabel .= "<span style='color: #ef4444;'>●</span> Downtime: {$cDownPct}%";
                                                 } elseif ($cTotal > 0) {
                                                     $cStyle = 'style="background-color: #10b981;"';
-                                                    $cLabel .= "<span style='color: #10b981;'>●</span> " . __('status.operational');
+                                                    $cLabel .= "<span style='color: #10b981;'>●</span> 100% " . __('status.operational');
                                                 } else {
                                                     $cStyle = 'style="background-color: var(--bs-secondary-bg);"';
                                                     $cLabel .= "<span style='color: #94a3b8;'>●</span> " . __('public.no_data_recorded');
@@ -572,12 +635,13 @@ $allMaintenances = $allMaintenances ?? [];
                                                     'monitor_id'    => $child['id'],
                                                     'monitor'       => $child['name'],
                                                     'checks'        => $cTotal,
-                                                    'up_checks'     => max(0, $cTotal - $cDown - $cBlack),
-                                                    'uptime_pct'    => ($cTotal > 0) ? round((($cTotal - $cDown - $cBlack) / $cTotal) * 100, 2) : null,
+                                                    'up_checks'     => $cUp,
+                                                    'uptime_pct'    => ($cTotal > 0) ? $cUpPct : null,
                                                     'blackouts'     => $cBlack,
-                                                    'blackout_pct'  => ($cTotal > 0) ? round(($cBlack / $cTotal) * 100, 1) : 0,
+                                                    'blackout_pct'  => $cBlackPct,
                                                     'outages'       => $cDown,
-                                                    'outage_pct'    => ($cTotal > 0) ? round(($cDown / $cTotal) * 100, 1) : 0,
+                                                    'outage_pct'    => $cDownPct,
+                                                    'child_issues'  => [],
                                                     'incidents'     => [],
                                                     'maintenances'  => []
                                                 ];
@@ -682,8 +746,8 @@ $allMaintenances = $allMaintenances ?? [];
 <!-- Modal 1: Daily History Inspector with Interactive Stats Breakdown -->
 <div class="modal fade" id="dayDetailModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
-        <div class="modal-content shadow">
-            <div class="modal-header">
+        <div class="modal-content shadow border">
+            <div class="modal-header border-bottom">
                 <div>
                     <h5 class="modal-title fw-bold text-body" id="dayModalDateTitle"><?= __('public.daily_report') ?></h5>
                     <small class="text-muted" id="dayModalMonitorName">Service Name</small>
@@ -691,6 +755,14 @@ $allMaintenances = $allMaintenances ?? [];
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-4">
+                <!-- Secondary Telemetry Problem Alert in Modal -->
+                <div id="dayModalChildAlert" class="alert alert-warning border border-warning d-none py-2 px-3 mb-3 small d-flex align-items-center gap-2">
+                    <i class="bi bi-exclamation-triangle-fill fs-5 text-warning"></i>
+                    <div>
+                        <strong>Notice:</strong> One or more secondary probes under this service reported issues on this date.
+                    </div>
+                </div>
+
                 <!-- 4 Interactive Stat Cards -->
                 <div class="row g-2 mb-3 text-center">
                     <div class="col-3">
@@ -778,12 +850,12 @@ $allMaintenances = $allMaintenances ?? [];
                         </div>
                         <div class="table-responsive">
                             <table id="dayModalLogsTable" class="table table-sm table-hover align-middle mb-0 w-100 bg-body rounded border">
-                                <thead class="table-light">
+                                <thead>
                                     <tr>
                                         <th style="width: 100px;">Time</th>
-                                        <th style="width: 80px;">Status</th>
+                                        <th style="width: 90px;">Status</th>
                                         <th style="width: 90px;">Latency</th>
-                                        <th style="width: 70px;">HTTP</th>
+                                        <th style="width: 80px;">HTTP</th>
                                         <th>Diagnostics</th>
                                     </tr>
                                 </thead>
@@ -808,7 +880,7 @@ $allMaintenances = $allMaintenances ?? [];
                     </div>
                 </div>
             </div>
-            <div class="modal-footer">
+            <div class="modal-footer border-top">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('common.close') ?></button>
             </div>
         </div>
@@ -818,7 +890,7 @@ $allMaintenances = $allMaintenances ?? [];
 <!-- Modal 2: Unified 2-in-1 Subscribe / Unsubscribe -->
 <div class="modal fade" id="subscriptionModal" tabindex="-1">
     <div class="modal-dialog">
-        <div class="modal-content shadow">
+        <div class="modal-content shadow border">
             <div class="modal-header border-bottom-0 pb-0">
                 <ul class="nav nav-pills card-header-pills w-100" role="tablist">
                     <li class="nav-item flex-fill text-center">
@@ -916,6 +988,13 @@ function openDayDetailModalFromElement(el) {
         document.getElementById('dayModalChecksCount').textContent = data.checks;
         document.getElementById('dayModalOutagesCount').textContent = data.outages;
         document.getElementById('dayModalBlackoutsCount').textContent = data.blackouts;
+
+        const childAlert = document.getElementById('dayModalChildAlert');
+        if (data.child_issues && data.child_issues.length > 0) {
+            childAlert.classList.remove('d-none');
+        } else {
+            childAlert.classList.add('d-none');
+        }
 
         const uptimeElem = document.getElementById('dayModalUptimePct');
         const cleanMsg   = document.getElementById('dayModalCleanMsg');
@@ -1058,7 +1137,7 @@ function toggleUptimeDonutChart() {
     document.getElementById('donutLegBlack').textContent = `${blackPct}% (${black})`;
 
     let offset = 0;
-    let svgHtml = '<circle cx="18" cy="18" r="15.915" fill="none" stroke="#e2e8f0" stroke-width="3"></circle>';
+    let svgHtml = '<circle cx="18" cy="18" r="15.915" fill="none" stroke="var(--bs-border-color)" stroke-width="3"></circle>';
 
     if (up > 0) {
         const strokeVal = ((up / total) * 100);
