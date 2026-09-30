@@ -23,35 +23,11 @@ class ExternalStatusPlugin
     {
         $this->forceInsert = $forceInsert;
 
-        // 0a. Auto-cleanup: remove historical duplicates on same target
+        // Auto-cleanup: remove historical duplicates on same target
         $this->db->exec("
             DELETE m1 FROM monitors m1 
             INNER JOIN monitors m2 ON m1.target = m2.target 
             WHERE m1.id > m2.id
-        ");
-
-        // 0b. Auto-heal: convert historical false-positive 'down' logs caused by degraded performance to 'up'
-        $this->db->exec("
-            UPDATE monitor_logs 
-            SET status = 'up' 
-            WHERE status = 'down' 
-              AND (error_message LIKE '%degraded%' OR http_code IN (400, 429))
-        ");
-
-        // 0c. Auto-cleanup: remove local server blackout logs mistakenly assigned to external cloud providers
-        $this->db->exec("
-            DELETE ml FROM monitor_logs ml
-            INNER JOIN monitors m ON ml.monitor_id = m.id
-            WHERE ml.status = 'blackout' 
-              AND (
-                m.target LIKE 'https://www.cloudflarestatus.com%'
-                OR m.target LIKE 'https://status.aws.amazon.com%'
-                OR m.target LIKE 'https://health.aws.amazon.com%'
-                OR m.target LIKE 'https://azure.status.microsoft%'
-                OR m.target LIKE 'https://status.stripe.com%'
-                OR m.target LIKE 'https://www.paypal-status.com%'
-                OR m.target LIKE 'https://www.githubstatus.com%'
-              )
         ");
 
         $results = [];
@@ -223,17 +199,6 @@ class ExternalStatusPlugin
         $data = $this->fetchJson('https://www.cloudflarestatus.com/api/v2/summary.json');
         if (!$data) return 'unknown';
 
-        $overallIndicator = strtolower($data['status']['indicator'] ?? 'none');
-
-        $parentStatus = match ($overallIndicator) {
-            'none', 'maintenance' => 'operational',
-            'minor'               => 'degraded',
-            'major', 'critical'   => 'down',
-            default               => 'operational'
-        };
-
-        $parentId = $this->upsertMonitor('Cloudflare Global Network', 'https://www.cloudflarestatus.com', $parentStatus, null, 0);
-
         // Map component keywords to readable names and slugs
         $coreKeywords = [
             'worker'        => ['name' => 'Workers & Pages Platform', 'slug' => 'workers'],
@@ -268,6 +233,10 @@ class ExternalStatusPlugin
         $matchedSlugs = [];
         $components = $data['components'] ?? [];
 
+        $hasDegraded = false;
+        $hasDown     = false;
+        $subservicesToSave = [];
+
         foreach ($components as $comp) {
             $name = $comp['name'] ?? '';
             if (str_contains($name, ' - ') || !empty($comp['group'])) {
@@ -276,6 +245,7 @@ class ExternalStatusPlugin
 
             foreach ($coreKeywords as $keyword => $info) {
                 if (stripos($name, $keyword) !== false && !in_array($info['slug'], $matchedSlugs, true)) {
+                    // Skip if disabled by the user
                     if (!in_array($info['slug'], $enabledSlugs, true)) {
                         $matchedSlugs[] = $info['slug'];
                         break;
@@ -289,12 +259,36 @@ class ExternalStatusPlugin
                         default                                  => 'operational'
                     };
 
-                    $targetUrl = "https://www.cloudflarestatus.com#{$info['slug']}";
-                    $this->upsertMonitor("Cloudflare - {$info['name']}", $targetUrl, $cStatus, $parentId, 0);
+                    if ($cStatus === 'down') {
+                        $hasDown = true;
+                    } elseif ($cStatus === 'degraded') {
+                        $hasDegraded = true;
+                    }
+
+                    $subservicesToSave[] = [
+                        'name'   => "Cloudflare - {$info['name']}",
+                        'target' => "https://www.cloudflarestatus.com#{$info['slug']}",
+                        'status' => $cStatus
+                    ];
+
                     $matchedSlugs[] = $info['slug'];
                     break;
                 }
             }
+        }
+
+        // Parent status reflects ONLY the enabled sub-services selected by the user
+        $parentStatus = 'operational';
+        if ($hasDown) {
+            $parentStatus = 'down';
+        } elseif ($hasDegraded) {
+            $parentStatus = 'degraded';
+        }
+
+        $parentId = $this->upsertMonitor('Cloudflare Global Network', 'https://www.cloudflarestatus.com', $parentStatus, null, 0);
+
+        foreach ($subservicesToSave as $sub) {
+            $this->upsertMonitor($sub['name'], $sub['target'], $sub['status'], $parentId, 0);
         }
 
         return $parentStatus;
@@ -412,7 +406,6 @@ class ExternalStatusPlugin
             return $monitorId;
         }
 
-        // Insert if forceInsert is active OR if it is the configured Tunnel
         if ($this->forceInsert || $alwaysCreate) {
             $insert = $this->db->prepare("
                 INSERT INTO monitors (name, type, target, parent_id, sort_order, is_primary, current_status, interval_seconds, last_check, is_active) 
