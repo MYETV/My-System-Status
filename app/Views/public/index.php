@@ -418,10 +418,20 @@ $allMaintenances = $allMaintenances ?? [];
                             $hasIncident    = !empty($dayIncidents);
                             $hasChildIssues = !empty($childIssuesByDate[$dayDate]);
 
+                            // Check if any child probe has active issues today (day === 0)
+                            if ($day === 0 && $hasChildren) {
+                                foreach ($monitor['children'] as $child) {
+                                    if ($child['current_status'] !== 'operational') {
+                                        $hasChildIssues = true;
+                                        break;
+                                    }
+                                }
+                            }
+
                             $barClass = 'uptime-bar';
                             $barStyle = '';
 
-                            // Realistic rendering: historical telemetry is never overwritten by instant status
+                            // Strict telemetry display: parent bar reflects only its own checks
                             if ($blackChecks > 0 && $downChecks > 0) {
                                 $vBlack = max(18, min(45, (int)$blackPct));
                                 $vRed   = max(18, min(45, (int)$downPct));
@@ -445,16 +455,14 @@ $allMaintenances = $allMaintenances ?? [];
                                     $barStyle = "style=\"background: linear-gradient(to top, #ef4444 0%, #ef4444 {$vRed}%, #10b981 {$vRed}%, #10b981 100%);\"";
                                 }
                                 $statusDesc = "<span style='color: #ef4444;'>●</span> Downtime: {$downPct}% ({$dailyUptimePct}% " . __('public.uptime') . ")";
-                            } elseif ($day === 0 && ($isDown || $isDegraded)) {
-                                // Currently having an active outage without recorded batch logs yet
-                                if ($isDown) {
-                                    $barStyle = 'style="background-color: #ef4444;"';
-                                    $statusDesc = "<span style='color: #ef4444;'>●</span> " . __('status.major_outage');
-                                } else {
-                                    $barStyle = 'style="background-color: #f59e0b;"';
-                                    $statusDesc = "<span style='color: #f59e0b;'>●</span> " . __('status.degraded');
-                                }
-                            } elseif ($totalChecks > 0) {
+                            } elseif ($day === 0 && $isDown) {
+                                $barStyle = 'style="background-color: #ef4444;"';
+                                $statusDesc = "<span style='color: #ef4444;'>●</span> " . __('status.major_outage');
+                            } elseif ($day === 0 && $isDegraded && !$hasChildren) {
+                                // Only standalone monitors without sub-services color the whole bar yellow
+                                $barStyle = 'style="background-color: #f59e0b;"';
+                                $statusDesc = "<span style='color: #f59e0b;'>●</span> " . __('status.degraded');
+                            } elseif ($totalChecks > 0 || $day === 0) {
                                 $barStyle = 'style="background-color: #10b981;"';
                                 $statusDesc = "<span style='color: #10b981;'>●</span> 100% " . __('status.operational');
                             } else {
