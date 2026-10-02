@@ -40,6 +40,11 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
                     </a>
                 </li>
                 <li class="nav-item">
+                    <a class="nav-link" data-bs-toggle="tab" href="#adsTab" role="tab">
+                        <i class="bi bi-badge-ad text-warning me-1"></i> Advertisements
+                    </a>
+                </li>
+                <li class="nav-item">
                     <a class="nav-link" data-bs-toggle="tab" href="#securityTab" role="tab">
                         <i class="bi bi-shield-lock-fill text-danger me-1"></i> Security
                     </a>
@@ -163,7 +168,52 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
                 </div>
             </div>
 
-            <!-- 2. SECURITY TAB (Turnstile & Rate Limiter) -->
+            <!-- 2. ADVERTISEMENTS & GOOGLE ADSENSE TAB -->
+            <div class="tab-pane fade" id="adsTab" role="tabpanel">
+                <div class="p-4 bg-body-tertiary rounded-3 border mb-4">
+                    <div class="d-flex align-items-center justify-content-between mb-3">
+                        <div>
+                            <h5 class="fw-bold mb-1"><i class="bi bi-badge-ad text-primary me-2"></i>Global Advertisement Settings</h5>
+                            <p class="text-body-secondary small mb-0">Enable ads and auto-inject Google AdSense into the <code>&lt;head&gt;</code> section of public pages.</p>
+                        </div>
+                        <div class="form-check form-switch fs-5">
+                            <input class="form-check-input" type="checkbox" name="ads_enabled" value="1" id="adsSwitch" <?= setting('ads_enabled') === '1' ? 'checked' : '' ?>>
+                        </div>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Google AdSense Publisher ID</label>
+                            <input type="text" name="adsense_client_id" value="<?= htmlspecialchars(setting('adsense_client_id', '')) ?>" class="form-control font-monospace" placeholder="ca-pub-XXXXXXXXXXXXXXXX">
+                            <small class="text-body-secondary">Automatically injects the official async loader script in <code>&lt;head&gt;</code> across the public status site.</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Custom / Additional Ad Header Script (Optional)</label>
+                            <textarea name="ads_header_code" class="form-control font-monospace" rows="2" placeholder="<!-- Additional ad tags or meta scripts -->"><?= htmlspecialchars(setting('ads_header_code', '')) ?></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-4 bg-body-tertiary rounded-3 border">
+                    <div class="d-flex align-items-center justify-content-between mb-3">
+                        <div>
+                            <h5 class="fw-bold mb-1"><i class="bi bi-layout-text-window-reverse text-success me-2"></i>Footer Ad Unit Placement</h5>
+                            <p class="text-body-secondary small mb-0">Display a responsive banner ad unit at the bottom of public pages, above the footer.</p>
+                        </div>
+                        <div class="form-check form-switch fs-5">
+                            <input class="form-check-input" type="checkbox" name="ads_footer_enabled" value="1" id="adsFooterSwitch" <?= setting('ads_footer_enabled') === '1' ? 'checked' : '' ?>>
+                        </div>
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="form-label fw-semibold">Footer Ad Unit Code (HTML / JavaScript)</label>
+                        <textarea name="ads_footer_code" class="form-control font-monospace" rows="5" placeholder="&lt;ins class=&quot;adsbygoogle&quot;&#10;     style=&quot;display:block&quot;&#10;     data-ad-client=&quot;ca-pub-XXXXXXXXXXXXXXXX&quot;&#10;     data-ad-slot=&quot;1234567890&quot;&#10;     data-ad-format=&quot;auto&quot;&#10;     data-full-width-responsive=&quot;true&quot;&gt;&lt;/ins&gt;&#10;&lt;script&gt;&#10;     (adsbygoogle = window.adsbygoogle || []).push({});&#10;&lt;/script&gt;"><?= htmlspecialchars(setting('ads_footer_code', '')) ?></textarea>
+                        <small class="text-body-secondary d-block mt-1">Paste your AdSense ad unit block (the <code>&lt;ins&gt;</code> container and script) or any HTML/JS banner snippet.</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. SECURITY TAB (Turnstile & Rate Limiter) -->
             <div class="tab-pane fade" id="securityTab" role="tabpanel">
                 <div class="p-4 bg-body-tertiary rounded-3 border mb-4">
                     <div class="d-flex align-items-center justify-content-between mb-3">
@@ -214,7 +264,7 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
                 </div>
             </div>
 
-            <!-- 3. SMTP (EMAIL) TAB -->
+            <!-- 4. SMTP (EMAIL) TAB -->
             <div class="tab-pane fade" id="smtpTab" role="tabpanel">
                 <div class="row g-3">
                     <div class="col-md-8">
@@ -237,8 +287,8 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
                         <label class="form-label fw-semibold">Encryption Protocol</label>
                         <select name="smtp_encryption" class="form-select">
                             <option value="starttls" <?= setting('smtp_encryption', 'starttls') === 'starttls' ? 'selected' : '' ?>>STARTTLS (Default Port 587)</option>
-                            <option value="ssl" <?= setting('smtp_encryption') === 'ssl' ? 'selected' : '' ?>>SSL / TLS (Port 465)</option>
-                            <option value="none" <?= setting('smtp_encryption') === 'none' ? 'selected' : '' ?>>None (Plain Port 25)</option>
+                            <option value="ssl" <?= setting('smtp_encryption', 'ssl') === 'selected' ? 'selected' : '' ?>>SSL / TLS (Port 465)</option>
+                            <option value="none" <?= setting('smtp_encryption', 'none') === 'selected' ? 'selected' : '' ?>>None (Plain Port 25)</option>
                         </select>
                     </div>
                     <div class="col-md-6">
@@ -248,7 +298,7 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
                 </div>
             </div>
 
-            <!-- 4. OAUTH SSO TAB -->
+            <!-- 5. OAUTH SSO TAB -->
             <div class="tab-pane fade" id="oauthTab" role="tabpanel">
                 <div class="p-3 bg-body-tertiary rounded-3 mb-4 border">
                     <h5 class="fw-bold text-primary mb-2"><i class="bi bi-tv me-2"></i>MYETV SSO Provider</h5>
@@ -308,7 +358,7 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
                 </div>
             </div>
 
-            <!-- 5. AI ENGINE TAB -->
+            <!-- 6. AI ENGINE TAB -->
             <div class="tab-pane fade" id="aiTab" role="tabpanel">
                 <div class="row g-3">
                     <div class="col-md-4">
@@ -359,7 +409,7 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
                 </div>
             </div>
 
-            <!-- 6. INTEGRATIONS TAB -->
+            <!-- 7. INTEGRATIONS TAB -->
             <div class="tab-pane fade" id="integrationsTab" role="tabpanel">
                 <div class="mb-3">
                     <label class="form-label fw-semibold"><i class="bi bi-discord text-primary me-1"></i> Discord Channel Webhook URL</label>
