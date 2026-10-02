@@ -30,7 +30,7 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
         </div>
     <?php endif; ?>
 
-    <form action="/admin/settings/update" method="POST" class="card shadow-sm border-0">
+    <form action="/admin/settings/update" method="POST" id="platformSettingsForm" class="card shadow-sm border-0">
         <!-- Navigation Tabs -->
         <div class="card-header bg-body border-bottom p-0">
             <ul class="nav nav-tabs card-header-tabs m-0 px-3" role="tablist">
@@ -189,7 +189,8 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
                         </div>
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">Custom / Additional Ad Header Script (Optional)</label>
-                            <textarea name="ads_header_code" class="form-control font-monospace" rows="2" placeholder="<!-- Additional ad tags or meta scripts -->"><?= htmlspecialchars(setting('ads_header_code', '')) ?></textarea>
+                            <textarea id="ads_header_code_input" class="form-control font-monospace" rows="2" placeholder="<!-- Additional ad tags or meta scripts -->"><?= htmlspecialchars(setting('ads_header_code', '')) ?></textarea>
+                            <input type="hidden" name="ads_header_code_b64" id="ads_header_code_b64">
                         </div>
                     </div>
                 </div>
@@ -207,7 +208,8 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
 
                     <div class="mb-2">
                         <label class="form-label fw-semibold">Footer Ad Unit Code (HTML / JavaScript)</label>
-                        <textarea name="ads_footer_code" class="form-control font-monospace" rows="5" placeholder="&lt;ins class=&quot;adsbygoogle&quot;&#10;     style=&quot;display:block&quot;&#10;     data-ad-client=&quot;ca-pub-XXXXXXXXXXXXXXXX&quot;&#10;     data-ad-slot=&quot;1234567890&quot;&#10;     data-ad-format=&quot;auto&quot;&#10;     data-full-width-responsive=&quot;true&quot;&gt;&lt;/ins&gt;&#10;&lt;script&gt;&#10;     (adsbygoogle = window.adsbygoogle || []).push({});&#10;&lt;/script&gt;"><?= htmlspecialchars(setting('ads_footer_code', '')) ?></textarea>
+                        <textarea id="ads_footer_code_input" class="form-control font-monospace" rows="5" placeholder="&lt;ins class=&quot;adsbygoogle&quot;&#10;     style=&quot;display:block&quot;&#10;     data-ad-client=&quot;ca-pub-XXXXXXXXXXXXXXXX&quot;&#10;     data-ad-slot=&quot;1234567890&quot;&#10;     data-ad-format=&quot;auto&quot;&#10;     data-full-width-responsive=&quot;true&quot;&gt;&lt;/ins&gt;&#10;&lt;script&gt;&#10;     (adsbygoogle = window.adsbygoogle || []).push({});&#10;&lt;/script&gt;"><?= htmlspecialchars(setting('ads_footer_code', '')) ?></textarea>
+                        <input type="hidden" name="ads_footer_code_b64" id="ads_footer_code_b64">
                         <small class="text-body-secondary d-block mt-1">Paste your AdSense ad unit block (the <code>&lt;ins&gt;</code> container and script) or any HTML/JS banner snippet.</small>
                     </div>
                 </div>
@@ -651,11 +653,36 @@ $enabledLocales  = array_keys(SettingService::getEnabledLocales());
         }
     }
 
+    // Base64 encoder with full UTF-8 support to prevent ModSecurity / WAF false positives
+    function utf8ToBase64(str) {
+        return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, function(match, p1) {
+            return String.fromCharCode('0x' + p1);
+        }));
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
         const providerSelect = document.getElementById('aiProviderSelect');
         if (providerSelect) {
             providerSelect.addEventListener('change', updateAIFields);
             updateAIFields();
+        }
+
+        // Intercept form submit and encode raw HTML/JS code into Base64 hidden inputs
+        const settingsForm = document.getElementById('platformSettingsForm');
+        if (settingsForm) {
+            settingsForm.addEventListener('submit', function() {
+                const headerInput = document.getElementById('ads_header_code_input');
+                const footerInput = document.getElementById('ads_footer_code_input');
+                const headerB64   = document.getElementById('ads_header_code_b64');
+                const footerB64   = document.getElementById('ads_footer_code_b64');
+
+                if (headerInput && headerB64) {
+                    headerB64.value = utf8ToBase64(headerInput.value);
+                }
+                if (footerInput && footerB64) {
+                    footerB64.value = utf8ToBase64(footerInput.value);
+                }
+            });
         }
     });
 </script>
