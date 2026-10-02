@@ -30,7 +30,9 @@ class SettingController
             'turnstile_enabled',
             'rate_limit_enabled',
             'cf_tunnel_is_primary',
-            'edge_worker_enabled'
+            'edge_worker_enabled',
+            'ads_enabled',
+            'ads_footer_enabled'
         ];
 
         foreach ($checkboxKeys as $cbKey) {
@@ -62,7 +64,9 @@ class SettingController
             // Cloudflare Zero Trust Tunnel
             'cf_tunnel_name', 'cf_tunnel_account_id', 'cf_tunnel_id', 'cf_tunnel_api_token',
             // Cloudflare Edge Worker Probes
-            'edge_worker_url', 'edge_worker_token'
+            'edge_worker_url', 'edge_worker_token',
+            // Google AdSense Publisher ID
+            'adsense_client_id'
         ];
 
         foreach ($textKeys as $key) {
@@ -71,7 +75,19 @@ class SettingController
             }
         }
 
-        // 4. Immediately poll Cloudflare Tunnel with forceInsert = true so new tunnels are created in database
+        // 4. Raw code / HTML injections (preserve formatting without trimming)
+        $rawKeys = [
+            'ads_header_code',
+            'ads_footer_code'
+        ];
+
+        foreach ($rawKeys as $rawKey) {
+            if (isset($_POST[$rawKey])) {
+                SettingService::set($rawKey, $_POST[$rawKey]);
+            }
+        }
+
+        // 5. Immediately poll Cloudflare Tunnel with forceInsert = true so new tunnels are created in database
         try {
             $plugin = new ExternalStatusPlugin();
             $plugin->syncAll(true);
