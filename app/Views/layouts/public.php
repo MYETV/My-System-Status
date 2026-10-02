@@ -33,6 +33,26 @@ $privacyUrl = trim(setting('privacy_policy_url', ''));
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
 
+    <!-- Google AdSense Global Site-wide Loader Script (Head) -->
+    <?php if (setting('ads_enabled', '0') === '1'): ?>
+        <?php 
+        $adsenseClientId = trim(setting('adsense_client_id', ''));
+        if (!empty($adsenseClientId)): 
+            if (strpos($adsenseClientId, 'ca-pub-') !== 0 && is_numeric($adsenseClientId)) {
+                $adsenseClientId = 'ca-pub-' . $adsenseClientId;
+            }
+        ?>
+            <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=<?= htmlspecialchars($adsenseClientId) ?>" crossorigin="anonymous"></script>
+        <?php endif; ?>
+
+        <?php 
+        $adsHeaderCode = setting('ads_header_code', '');
+        if (!empty($adsHeaderCode)) {
+            echo $adsHeaderCode . "\n";
+        }
+        ?>
+    <?php endif; ?>
+
     <style>
         body {
             background-color: var(--bs-body-tertiary-bg);
@@ -89,6 +109,19 @@ $privacyUrl = trim(setting('privacy_policy_url', ''));
             font-size: 12px;
             border-radius: 6px;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Footer Advertisement Unit Container Styling */
+        .footer-ad-container {
+            width: 100%;
+            overflow: hidden;
+        }
+        .footer-ad-container .ad-label {
+            font-size: 0.72rem;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            opacity: 0.65;
+            margin-bottom: 4px;
         }
     </style>
 </head>
@@ -180,6 +213,23 @@ $privacyUrl = trim(setting('privacy_policy_url', ''));
 <main class="flex-grow-1">
     <?= $content ?>
 </main>
+
+<!-- Public Footer Advertisement Unit -->
+<?php if (setting('ads_enabled', '0') === '1' && setting('ads_footer_enabled', '0') === '1'): ?>
+    <?php 
+    $footerAdCode = setting('ads_footer_code', '');
+    if (!empty($footerAdCode)): 
+    ?>
+        <div class="footer-ad-container py-3 bg-body-secondary border-top">
+            <div class="container text-center overflow-hidden" style="max-width: 900px;">
+                <div class="ad-label text-body-secondary"><?= __('public.advertisement', 'Advertisement') ?></div>
+                <div class="d-flex justify-content-center">
+                    <?= $footerAdCode ?>
+                </div>
+            </div>
+        </div>
+    <?php endif; ?>
+<?php endif; ?>
 
 <!-- Public Footer with Dynamic Legal Links -->
 <footer class="footer">
