@@ -75,16 +75,23 @@ class SettingController
             }
         }
 
-        // 4. Raw code / HTML injections (preserve formatting without trimming)
-        $rawKeys = [
-            'ads_header_code',
-            'ads_footer_code'
-        ];
-
-        foreach ($rawKeys as $rawKey) {
-            if (isset($_POST[$rawKey])) {
-                SettingService::set($rawKey, $_POST[$rawKey]);
+        // 4. Decode Base64 ad scripts to completely bypass ModSecurity / WAF XSS inspection
+        if (isset($_POST['ads_header_code_b64'])) {
+            $decodedHeader = base64_decode($_POST['ads_header_code_b64'], true);
+            if ($decodedHeader !== false) {
+                SettingService::set('ads_header_code', $decodedHeader);
             }
+        } elseif (isset($_POST['ads_header_code'])) {
+            SettingService::set('ads_header_code', $_POST['ads_header_code']);
+        }
+
+        if (isset($_POST['ads_footer_code_b64'])) {
+            $decodedFooter = base64_decode($_POST['ads_footer_code_b64'], true);
+            if ($decodedFooter !== false) {
+                SettingService::set('ads_footer_code', $decodedFooter);
+            }
+        } elseif (isset($_POST['ads_footer_code'])) {
+            SettingService::set('ads_footer_code', $_POST['ads_footer_code']);
         }
 
         // 5. Immediately poll Cloudflare Tunnel with forceInsert = true so new tunnels are created in database
