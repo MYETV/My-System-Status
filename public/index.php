@@ -137,6 +137,11 @@ $router->post('/admin/plugins/save-feeds-config', [\App\Controllers\Admin\Plugin
 
 // Settings Routes
 $router->get('/admin/settings', [\App\Controllers\Admin\SettingController::class, 'index']);
+// Fallback redirect for direct GET requests or page reloads on the update endpoint
+$router->get('/admin/settings/update', function() {
+    header('Location: /admin/settings');
+    exit;
+});
 $router->post('/admin/settings/update', [\App\Controllers\Admin\SettingController::class, 'update']);
 
 // System Logs
