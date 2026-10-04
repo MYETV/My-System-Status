@@ -243,6 +243,18 @@ foreach ($monitors as $m) {
 <!-- Edit Modals for Root and Child Monitors -->
 <?php foreach ($allMonitors as $m): ?>
     <?php if (empty($m['is_external'])): ?>
+        <?php
+            $currentType = $m['type'] ?? 'http';
+            $fieldConfig = [
+                'http' => ['label' => 'Target URL', 'placeholder' => 'https://api.example.com'],
+                'ping' => ['label' => 'Target Host or IP', 'placeholder' => '192.168.1.1 or example.com'],
+                'port' => ['label' => 'Target Host or IP', 'placeholder' => '127.0.0.1 or db.example.com'],
+                'ssl'  => ['label' => 'Target Domain', 'placeholder' => 'example.com'],
+                'path' => ['label' => 'Filesystem Path / Mount', 'placeholder' => '/mnt/storage or /media/backup_disk'],
+            ];
+            $currentLabel = $fieldConfig[$currentType]['label'] ?? 'Target';
+            $currentPlaceholder = $fieldConfig[$currentType]['placeholder'] ?? '';
+        ?>
         <div class="modal fade" id="editMonitorModal<?= $m['id'] ?>" tabindex="-1">
             <div class="modal-dialog">
                 <form action="/admin/monitors/update" method="POST" class="modal-content">
@@ -261,12 +273,12 @@ foreach ($monitors as $m) {
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 <label class="form-label fw-semibold">Probe Type</label>
-                                <select name="type" id="probeTypeEdit<?= $m['id'] ?>" class="form-select" onchange="togglePortFieldEdit(<?= $m['id'] ?>)">
-                                    <option value="http" <?= $m['type'] === 'http' ? 'selected' : '' ?>>HTTP / HTTPS</option>
-                                    <option value="ping" <?= $m['type'] === 'ping' ? 'selected' : '' ?>>Ping (ICMP)</option>
-                                    <option value="port" <?= $m['type'] === 'port' ? 'selected' : '' ?>>TCP Port</option>
-                                    <option value="ssl" <?= $m['type'] === 'ssl' ? 'selected' : '' ?>>SSL Expiration Check</option>
-                                    <option value="path" <?= $m['type'] === 'path' ? 'selected' : '' ?>>Path / Mount Check</option>
+                                <select name="type" id="probeTypeEdit<?= $m['id'] ?>" class="form-select" onchange="updateProbeFieldsEdit(<?= $m['id'] ?>)">
+                                    <option value="http" <?= $currentType === 'http' ? 'selected' : '' ?>>HTTP / HTTPS</option>
+                                    <option value="ping" <?= $currentType === 'ping' ? 'selected' : '' ?>>Ping (ICMP)</option>
+                                    <option value="port" <?= $currentType === 'port' ? 'selected' : '' ?>>TCP Port</option>
+                                    <option value="ssl" <?= $currentType === 'ssl' ? 'selected' : '' ?>>SSL Expiration Check</option>
+                                    <option value="path" <?= $currentType === 'path' ? 'selected' : '' ?>>Path / Mount Check</option>
                                 </select>
                             </div>
                             <div class="col-md-6">
@@ -284,11 +296,11 @@ foreach ($monitors as $m) {
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label fw-semibold">Target (URL / Host / IP / Path)</label>
-                            <input type="text" name="target" class="form-control" value="<?= htmlspecialchars($m['target']) ?>" required>
+                            <label class="form-label fw-semibold" id="targetLabelEdit<?= $m['id'] ?>"><?= $currentLabel ?></label>
+                            <input type="text" name="target" id="targetInputEdit<?= $m['id'] ?>" class="form-control" value="<?= htmlspecialchars($m['target']) ?>" placeholder="<?= $currentPlaceholder ?>" required>
                         </div>
 
-                        <div class="mb-3 <?= $m['type'] === 'port' ? '' : 'd-none' ?>" id="portFieldWrapperEdit<?= $m['id'] ?>">
+                        <div class="mb-3 <?= $currentType === 'port' ? '' : 'd-none' ?>" id="portFieldWrapperEdit<?= $m['id'] ?>">
                             <label class="form-label fw-semibold">Port Number</label>
                             <input type="number" name="port" class="form-control" value="<?= htmlspecialchars($m['port'] ?? '') ?>" placeholder="e.g. 3306, 22, 443">
                         </div>
@@ -337,14 +349,14 @@ foreach ($monitors as $m) {
             <div class="modal-body">
                 <div class="mb-3">
                     <label class="form-label fw-semibold">Service / Route Name</label>
-                    <input type="text" name="name" class="form-control" placeholder="e.g. MYETV Core API" required>
+                    <input type="text" name="name" class="form-control" placeholder="e.g. Primary Database or API Endpoint" required>
                 </div>
 
                 <div class="row mb-3">
                     <div class="col-md-6">
                         <label class="form-label fw-semibold">Probe Type</label>
-                        <select name="type" id="probeType" class="form-select" onchange="togglePortField()">
-                            <option value="http">HTTP / HTTPS</option>
+                        <select name="type" id="probeType" class="form-select" onchange="updateProbeFields()">
+                            <option value="http" selected>HTTP / HTTPS</option>
                             <option value="ping">Ping (ICMP)</option>
                             <option value="port">TCP Port</option>
                             <option value="ssl">SSL Expiration Check</option>
@@ -366,8 +378,8 @@ foreach ($monitors as $m) {
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label fw-semibold">Target (URL / Host / IP / Path)</label>
-                    <input type="text" name="target" class="form-control" placeholder="e.g. https://api.myetv.tv or /media/freed0m_8504/Exos14TB_bay3" required>
+                    <label class="form-label fw-semibold" id="targetLabel">Target URL</label>
+                    <input type="text" name="target" id="targetInput" class="form-control" placeholder="https://api.example.com" required>
                 </div>
 
                 <div class="mb-3 d-none" id="portFieldWrapper">
@@ -449,23 +461,77 @@ $(document).ready(function() {
     }
 });
 
-function togglePortField() {
+// Dynamic field updater for creation modal
+function updateProbeFields() {
     const type = document.getElementById('probeType').value;
     const portField = document.getElementById('portFieldWrapper');
+    const targetLabel = document.getElementById('targetLabel');
+    const targetInput = document.getElementById('targetInput');
+
     if (type === 'port') {
         portField.classList.remove('d-none');
     } else {
         portField.classList.add('d-none');
     }
+
+    switch (type) {
+        case 'http':
+            targetLabel.textContent = 'Target URL';
+            targetInput.placeholder = 'https://api.example.com';
+            break;
+        case 'ping':
+            targetLabel.textContent = 'Target Host or IP';
+            targetInput.placeholder = '192.168.1.1 or example.com';
+            break;
+        case 'port':
+            targetLabel.textContent = 'Target Host or IP';
+            targetInput.placeholder = '127.0.0.1 or db.example.com';
+            break;
+        case 'ssl':
+            targetLabel.textContent = 'Target Domain';
+            targetInput.placeholder = 'example.com';
+            break;
+        case 'path':
+            targetLabel.textContent = 'Filesystem Path / Mount';
+            targetInput.placeholder = '/mnt/storage or /media/backup_disk';
+            break;
+    }
 }
 
-function togglePortFieldEdit(id) {
+// Dynamic field updater for edit modals
+function updateProbeFieldsEdit(id) {
     const type = document.getElementById('probeTypeEdit' + id).value;
     const portField = document.getElementById('portFieldWrapperEdit' + id);
+    const targetLabel = document.getElementById('targetLabelEdit' + id);
+    const targetInput = document.getElementById('targetInputEdit' + id);
+
     if (type === 'port') {
         portField.classList.remove('d-none');
     } else {
         portField.classList.add('d-none');
+    }
+
+    switch (type) {
+        case 'http':
+            targetLabel.textContent = 'Target URL';
+            targetInput.placeholder = 'https://api.example.com';
+            break;
+        case 'ping':
+            targetLabel.textContent = 'Target Host or IP';
+            targetInput.placeholder = '192.168.1.1 or example.com';
+            break;
+        case 'port':
+            targetLabel.textContent = 'Target Host or IP';
+            targetInput.placeholder = '127.0.0.1 or db.example.com';
+            break;
+        case 'ssl':
+            targetLabel.textContent = 'Target Domain';
+            targetInput.placeholder = 'example.com';
+            break;
+        case 'path':
+            targetLabel.textContent = 'Filesystem Path / Mount';
+            targetInput.placeholder = '/mnt/storage or /media/backup_disk';
+            break;
     }
 }
 </script>
