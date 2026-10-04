@@ -214,6 +214,11 @@ try {
         }
     }
 
+    // --- v1.0.65: Add 'path' probe type to monitors for local filesystem/mount checks ---
+    if (table_exists($pdo, 'monitors')) {
+        $pdo->exec("ALTER TABLE `monitors` MODIFY COLUMN `type` ENUM('http', 'ping', 'port', 'ssl', 'path') NOT NULL DEFAULT 'http';");
+    }
+
     if (php_sapi_name() === 'cli') {
         echo "Database schema is fully up to date.\n";
     }
