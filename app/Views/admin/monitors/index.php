@@ -266,6 +266,7 @@ foreach ($monitors as $m) {
                                     <option value="ping" <?= $m['type'] === 'ping' ? 'selected' : '' ?>>Ping (ICMP)</option>
                                     <option value="port" <?= $m['type'] === 'port' ? 'selected' : '' ?>>TCP Port</option>
                                     <option value="ssl" <?= $m['type'] === 'ssl' ? 'selected' : '' ?>>SSL Expiration Check</option>
+                                    <option value="path" <?= $m['type'] === 'path' ? 'selected' : '' ?>>Path / Mount Check</option>
                                 </select>
                             </div>
                             <div class="col-md-6">
@@ -283,7 +284,7 @@ foreach ($monitors as $m) {
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label fw-semibold">Target (URL / Host / IP)</label>
+                            <label class="form-label fw-semibold">Target (URL / Host / IP / Path)</label>
                             <input type="text" name="target" class="form-control" value="<?= htmlspecialchars($m['target']) ?>" required>
                         </div>
 
@@ -347,6 +348,7 @@ foreach ($monitors as $m) {
                             <option value="ping">Ping (ICMP)</option>
                             <option value="port">TCP Port</option>
                             <option value="ssl">SSL Expiration Check</option>
+                            <option value="path">Path / Mount Check</option>
                         </select>
                     </div>
                     <div class="col-md-6">
@@ -364,8 +366,8 @@ foreach ($monitors as $m) {
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label fw-semibold">Target (URL / Host / IP)</label>
-                    <input type="text" name="target" class="form-control" placeholder="https://api.myetv.tv" required>
+                    <label class="form-label fw-semibold">Target (URL / Host / IP / Path)</label>
+                    <input type="text" name="target" class="form-control" placeholder="e.g. https://api.myetv.tv or /media/freed0m_8504/Exos14TB_bay3" required>
                 </div>
 
                 <div class="mb-3 d-none" id="portFieldWrapper">
