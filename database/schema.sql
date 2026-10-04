@@ -37,13 +37,13 @@ CREATE TABLE IF NOT EXISTS `rate_limits` (
     INDEX `idx_blocked` (`blocked_until`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Monitors & Routes (Includes parent_id, sort_order, and is_primary)
+-- Monitors & Routes (Includes parent_id, sort_order, is_primary, and 'path' probe type)
 CREATE TABLE IF NOT EXISTS `monitors` (
     `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     `parent_id` INT UNSIGNED NULL DEFAULT NULL,
     `sort_order` INT NOT NULL DEFAULT 0,
     `name` VARCHAR(150) NOT NULL,
-    `type` ENUM('http', 'ping', 'port', 'ssl') NOT NULL DEFAULT 'http',
+    `type` ENUM('http', 'ping', 'port', 'ssl', 'path') NOT NULL DEFAULT 'http',
     `target` VARCHAR(255) NOT NULL,
     `port` INT NULL,
     `interval_seconds` INT UNSIGNED DEFAULT 60,
