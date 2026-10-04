@@ -52,6 +52,7 @@ class MonitorService
                 'port' => $this->checkPort($monitor),
                 'ssl'  => $this->checkSsl($monitor),
                 'ping' => $this->checkPing($monitor),
+                'path' => $this->checkPath($monitor),
             };
         }
 
@@ -205,6 +206,9 @@ class MonitorService
         }
     }
 
+    /**
+     * ICMP Ping Probe.
+     */
     private function checkPing(array $monitor): void
     {
         $target = escapeshellarg($monitor['target']);
@@ -216,6 +220,33 @@ class MonitorService
             $this->logResult((int)$monitor['id'], 'up', $duration);
         } else {
             $this->logResult((int)$monitor['id'], 'down', $duration, null, "ICMP packet loss");
+        }
+    }
+
+    /**
+     * Local Filesystem Path / Mount Check.
+     */
+    private function checkPath(array $monitor): void
+    {
+        $path = $monitor['target'];
+        $start = microtime(true);
+
+        // Clear PHP stat cache to ensure real-time filesystem status
+        clearstatcache(true, $path);
+
+        $exists = @file_exists($path);
+        $duration = (int)((microtime(true) - $start) * 1000);
+
+        if ($exists) {
+            $this->logResult((int)$monitor['id'], 'up', $duration);
+        } else {
+            $this->logResult(
+                (int)$monitor['id'],
+                'down',
+                $duration,
+                null,
+                "Filesystem path is unavailable or unmounted: {$path}"
+            );
         }
     }
 
